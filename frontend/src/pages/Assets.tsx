@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import {
   PackagePlus,
   Radio,
@@ -6,6 +7,10 @@ import {
   Wrench,
 } from "lucide-react";
 
+import {
+  clearAuthentication,
+  getAuthorizationHeaders,
+} from "../auth";
 import Sidebar from "../components/Sidebar";
 import TopBar from "../components/TopBar";
 import AssetDetails from "../components/assets/AssetDetails";
@@ -90,6 +95,8 @@ async function getErrorMessage(
 }
 
 function Assets() {
+  const navigate = useNavigate();
+
   const [assets, setAssets] = useState<Asset[]>([]);
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] =
@@ -111,13 +118,27 @@ function Assets() {
   const [loading, setLoading] = useState(true);
   const [pageError, setPageError] = useState("");
 
+  const handleUnauthorized = () => {
+    clearAuthentication();
+    navigate("/login", { replace: true });
+  };
+
   useEffect(() => {
     const loadAssets = async () => {
       try {
         setLoading(true);
         setPageError("");
 
-        const response = await fetch(`${API_URL}/`);
+        const response = await fetch(`${API_URL}/`, {
+          headers: {
+            ...getAuthorizationHeaders(),
+          },
+        });
+
+        if (response.status === 401) {
+          handleUnauthorized();
+          return;
+        }
 
         if (!response.ok) {
           throw new Error("Unable to load assets.");
@@ -210,9 +231,15 @@ function Assets() {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
+            ...getAuthorizationHeaders(),
           },
           body: JSON.stringify(mapFormValues(values)),
         });
+
+        if (response.status === 401) {
+          handleUnauthorized();
+          return;
+        }
 
         if (!response.ok) {
           const message = await getErrorMessage(
@@ -239,12 +266,18 @@ function Assets() {
             method: "PUT",
             headers: {
               "Content-Type": "application/json",
+              ...getAuthorizationHeaders(),
             },
             body: JSON.stringify(
               mapFormValues(values),
             ),
           },
         );
+
+        if (response.status === 401) {
+          handleUnauthorized();
+          return;
+        }
 
         if (!response.ok) {
           const message = await getErrorMessage(
@@ -291,8 +324,16 @@ function Assets() {
         `${API_URL}/${deletingAsset.id}`,
         {
           method: "DELETE",
+          headers: {
+            ...getAuthorizationHeaders(),
+          },
         },
       );
+
+      if (response.status === 401) {
+        handleUnauthorized();
+        return;
+      }
 
       if (!response.ok && response.status !== 204) {
         const message = await getErrorMessage(
