@@ -1,46 +1,32 @@
 type StatCardProps = {
-    title: string;
-    value: string;
-    color?: string;
-  };
-  
-  function StatCard({
-    title,
-    value,
-    color = "#2563eb",
-  }: StatCardProps) {
-    return (
-      <div
-        style={{
-          background: "white",
-          borderRadius: "12px",
-          padding: "20px",
-          width: "220px",
-          boxShadow: "0 2px 8px rgba(0,0,0,0.08)",
-          borderLeft: `6px solid ${color}`,
-        }}
-      >
-        <h3
-          style={{
-            margin: 0,
-            color: "#6b7280",
-            fontSize: "16px",
-          }}
-        >
-          {title}
-        </h3>
-  
-        <h1
-          style={{
-            marginTop: "12px",
-            marginBottom: 0,
-            fontSize: "40px",
-          }}
-        >
-          {value}
-        </h1>
-      </div>
-    );
-  }
-  
-  export default StatCard;
+  title: string;
+  value: string;
+  description?: string;
+  color?: "blue" | "green" | "red" | "orange";
+};
+
+const colorClasses = {
+  blue: "border-l-blue-700",
+  green: "border-l-emerald-600",
+  red: "border-l-red-600",
+  orange: "border-l-orange-600",
+};
+
+function StatCard({
+  title,
+  value,
+  description,
+  color = "blue",
+}: StatCardProps) {
+  return (
+    <div
+      className={`rounded-xl border border-slate-200 border-l-4 bg-white p-5 shadow-sm ${colorClasses[color]}`}
+    >
+      <p className="text-sm font-semibold text-slate-500">{title}</p>
+      <p className="mt-2 text-3xl font-bold text-slate-950">{value}</p>
+      {description && <p className="mt-2 text-xs text-slate-500">{description}</p>}
+    </div>
+  );
+}
+
+export default StatCard;

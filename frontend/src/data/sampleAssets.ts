@@ -1,0 +1,48 @@
+import type { Asset } from "../types/asset";
+
+export const sampleAssets: Asset[] = [
+  {
+    assetNumber: "1001",
+    assetName: "Forklift 02",
+    category: "Material Handling",
+    project: "Disney Project",
+    status: "Online",
+    gpsStatus: "Live",
+    assignedTo: "Jose Martinez",
+    lastSeen: "Live now",
+    notes: "Assigned to the loading and staging team.",
+  },
+  {
+    assetNumber: "1002",
+    assetName: "Generator 04",
+    category: "Power Equipment",
+    project: "Airport Project",
+    status: "Offline",
+    gpsStatus: "Offline",
+    assignedTo: "Unassigned",
+    lastSeen: "3 hours ago",
+    notes: "GPS device requires a battery check.",
+  },
+  {
+    assetNumber: "1003",
+    assetName: "Scissor Lift 07",
+    category: "Aerial Equipment",
+    project: "Universal Project",
+    status: "Online",
+    gpsStatus: "Live",
+    assignedTo: "Miguel Rivera",
+    lastSeen: "2 minutes ago",
+    notes: "Currently operating on Level 3.",
+  },
+  {
+    assetNumber: "1004",
+    assetName: "Enclosed Trailer 03",
+    category: "Trailer",
+    project: "Disney Project",
+    status: "Maintenance",
+    gpsStatus: "Live",
+    assignedTo: "Warehouse Team",
+    lastSeen: "12 minutes ago",
+    notes: "Scheduled for tire inspection this week.",
+  },
+];
