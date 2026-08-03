@@ -36,16 +36,22 @@ function AssetForm({
   const [form, setForm] = useState<AssetFormValues>(() =>
     mode === "edit" && asset ? { ...asset } : blankForm,
   );
+
   const [localError, setLocalError] = useState("");
 
   const updateField = <K extends keyof AssetFormValues>(
     field: K,
     value: AssetFormValues[K],
   ) => {
-    setForm((current) => ({ ...current, [field]: value }));
+    setForm((current) => ({
+      ...current,
+      [field]: value,
+    }));
   };
 
-  const handleSubmit = (event: React.FormEvent<HTMLFormElement>) => {
+  const handleSubmit = (
+    event: React.FormEvent<HTMLFormElement>,
+  ) => {
     event.preventDefault();
 
     if (
@@ -54,18 +60,22 @@ function AssetForm({
       !form.category.trim() ||
       !form.project.trim()
     ) {
-      setLocalError("Asset number, name, category, and project are required.");
+      setLocalError(
+        "Asset number, name, category, and project are required.",
+      );
       return;
     }
 
     setLocalError("");
+
     onSubmit({
       ...form,
       assetNumber: form.assetNumber.trim(),
       assetName: form.assetName.trim(),
       category: form.category.trim(),
       project: form.project.trim(),
-      assignedTo: form.assignedTo.trim() || "Unassigned",
+      assignedTo:
+        form.assignedTo.trim() || "Unassigned",
       notes: form.notes.trim(),
     });
   };
@@ -77,7 +87,9 @@ function AssetForm({
       aria-modal="true"
       aria-labelledby="asset-form-title"
       onMouseDown={(event) => {
-        if (event.target === event.currentTarget) onClose();
+        if (event.target === event.currentTarget) {
+          onClose();
+        }
       }}
     >
       <div className="max-h-[92vh] w-full max-w-3xl overflow-y-auto rounded-2xl border border-slate-200 bg-white shadow-2xl">
@@ -86,14 +98,19 @@ function AssetForm({
             <p className="text-xs font-bold uppercase tracking-widest text-blue-700">
               Asset management
             </p>
+
             <h2
               id="asset-form-title"
               className="mt-1 text-xl font-bold text-slate-950"
             >
-              {mode === "create" ? "Add new asset" : "Edit asset"}
+              {mode === "create"
+                ? "Add new asset"
+                : "Edit asset"}
             </h2>
+
             <p className="mt-1 text-sm text-slate-500">
-              Enter the equipment and tracking information below.
+              Enter the equipment and tracking
+              information below.
             </p>
           </div>
 
@@ -107,7 +124,10 @@ function AssetForm({
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="p-6">
+        <form
+          onSubmit={handleSubmit}
+          className="p-6"
+        >
           {(localError || errorMessage) && (
             <div className="mb-5 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-700">
               {localError || errorMessage}
@@ -118,12 +138,14 @@ function AssetForm({
             <Field label="Asset number" required>
               <input
                 value={form.assetNumber}
-                disabled={mode === "edit"}
                 onChange={(event) =>
-                  updateField("assetNumber", event.target.value)
+                  updateField(
+                    "assetNumber",
+                    event.target.value,
+                  )
                 }
                 placeholder="1005"
-                className="field-input disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-500"
+                className="field-input"
               />
             </Field>
 
@@ -131,7 +153,10 @@ function AssetForm({
               <input
                 value={form.assetName}
                 onChange={(event) =>
-                  updateField("assetName", event.target.value)
+                  updateField(
+                    "assetName",
+                    event.target.value,
+                  )
                 }
                 placeholder="Boom Lift 12"
                 className="field-input"
@@ -142,7 +167,10 @@ function AssetForm({
               <input
                 value={form.category}
                 onChange={(event) =>
-                  updateField("category", event.target.value)
+                  updateField(
+                    "category",
+                    event.target.value,
+                  )
                 }
                 placeholder="Aerial Equipment"
                 className="field-input"
@@ -153,7 +181,10 @@ function AssetForm({
               <input
                 value={form.project}
                 onChange={(event) =>
-                  updateField("project", event.target.value)
+                  updateField(
+                    "project",
+                    event.target.value,
+                  )
                 }
                 placeholder="Disney Project"
                 className="field-input"
@@ -164,13 +195,22 @@ function AssetForm({
               <select
                 value={form.status}
                 onChange={(event) =>
-                  updateField("status", event.target.value as AssetStatus)
+                  updateField(
+                    "status",
+                    event.target.value as AssetStatus,
+                  )
                 }
                 className="field-input"
               >
-                <option value="Online">Online</option>
-                <option value="Offline">Offline</option>
-                <option value="Maintenance">Maintenance</option>
+                <option value="Online">
+                  Online
+                </option>
+                <option value="Offline">
+                  Offline
+                </option>
+                <option value="Maintenance">
+                  Maintenance
+                </option>
               </select>
             </Field>
 
@@ -178,31 +218,54 @@ function AssetForm({
               <select
                 value={form.gpsStatus}
                 onChange={(event) =>
-                  updateField("gpsStatus", event.target.value as GpsStatus)
+                  updateField(
+                    "gpsStatus",
+                    event.target.value as GpsStatus,
+                  )
                 }
                 className="field-input"
               >
-                <option value="Live">Live</option>
-                <option value="Offline">Offline</option>
-                <option value="Unassigned">Unassigned</option>
+                <option value="Live">
+                  Live
+                </option>
+                <option value="Offline">
+                  Offline
+                </option>
+                <option value="Unassigned">
+                  Unassigned
+                </option>
               </select>
             </Field>
 
-            <Field label="Assigned to" className="md:col-span-2">
+            <Field
+              label="Assigned to"
+              className="md:col-span-2"
+            >
               <input
                 value={form.assignedTo}
                 onChange={(event) =>
-                  updateField("assignedTo", event.target.value)
+                  updateField(
+                    "assignedTo",
+                    event.target.value,
+                  )
                 }
                 placeholder="Employee or team"
                 className="field-input"
               />
             </Field>
 
-            <Field label="Notes" className="md:col-span-2">
+            <Field
+              label="Notes"
+              className="md:col-span-2"
+            >
               <textarea
                 value={form.notes}
-                onChange={(event) => updateField("notes", event.target.value)}
+                onChange={(event) =>
+                  updateField(
+                    "notes",
+                    event.target.value,
+                  )
+                }
                 placeholder="Add maintenance, assignment, or tracking notes."
                 rows={4}
                 className="field-input resize-y"
@@ -218,12 +281,15 @@ function AssetForm({
             >
               Cancel
             </button>
+
             <button
               type="submit"
               className="inline-flex h-11 items-center justify-center gap-2 rounded-lg bg-blue-700 px-5 text-sm font-bold text-white shadow-sm transition hover:bg-blue-800 focus:outline-none focus:ring-2 focus:ring-blue-300"
             >
               <Save size={17} />
-              {mode === "create" ? "Save asset" : "Save changes"}
+              {mode === "create"
+                ? "Save asset"
+                : "Save changes"}
             </button>
           </div>
         </form>
@@ -239,13 +305,24 @@ type FieldProps = {
   children: React.ReactNode;
 };
 
-function Field({ label, required, className = "", children }: FieldProps) {
+function Field({
+  label,
+  required,
+  className = "",
+  children,
+}: FieldProps) {
   return (
     <label className={`block ${className}`}>
       <span className="mb-2 block text-sm font-bold text-slate-700">
         {label}
-        {required && <span className="ml-1 text-red-600">*</span>}
+
+        {required && (
+          <span className="ml-1 text-red-600">
+            *
+          </span>
+        )}
       </span>
+
       {children}
     </label>
   );

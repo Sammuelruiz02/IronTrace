@@ -10,7 +10,7 @@ router = APIRouter(prefix="/assets", tags=["Assets"])
 
 @router.get("/", response_model=list[AssetResponse])
 def get_assets(database: Session = Depends(get_database)):
-    return database.query(Asset).order_by(Asset.id.asc()).all()
+    return database.query(Asset).order_by(Asset.id.desc()).all()
 
 
 @router.post(
@@ -22,9 +22,11 @@ def create_asset(
     asset_data: AssetCreate,
     database: Session = Depends(get_database),
 ):
+    asset_number = asset_data.asset_number.strip()
+
     existing_asset = (
         database.query(Asset)
-        .filter(Asset.asset_number == asset_data.asset_number)
+        .filter(Asset.asset_number == asset_number)
         .first()
     )
 
@@ -34,7 +36,11 @@ def create_asset(
             detail="An asset with this asset number already exists.",
         )
 
-    asset = Asset(**asset_data.model_dump())
+    asset_values = asset_data.model_dump()
+    asset_values["asset_number"] = asset_number
+    asset_values["asset_name"] = asset_data.asset_name.strip()
+
+    asset = Asset(**asset_values)
 
     database.add(asset)
     database.commit()
@@ -59,6 +65,29 @@ def update_asset(
 
     updates = asset_data.model_dump(exclude_unset=True)
 
+    if "asset_number" in updates and updates["asset_number"] is not None:
+        new_asset_number = updates["asset_number"].strip()
+
+        duplicate_asset = (
+            database.query(Asset)
+            .filter(
+                Asset.asset_number == new_asset_number,
+                Asset.id != asset_id,
+            )
+            .first()
+        )
+
+        if duplicate_asset:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="An asset with this asset number already exists.",
+            )
+
+        updates["asset_number"] = new_asset_number
+
+    if "asset_name" in updates and updates["asset_name"] is not None:
+        updates["asset_name"] = updates["asset_name"].strip()
+
     for field, value in updates.items():
         setattr(asset, field, value)
 
@@ -68,7 +97,10 @@ def update_asset(
     return asset
 
 
-@router.delete("/{asset_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete(
+    "/{asset_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+)
 def delete_asset(
     asset_id: int,
     database: Session = Depends(get_database),
