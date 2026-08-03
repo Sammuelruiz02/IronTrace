@@ -1,6 +1,8 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from app import models, user_models
+from app.auth_routes import router as auth_router
 from app.database import Base, engine
 from app.routes import router as assets_router
 
@@ -22,6 +24,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+app.include_router(auth_router)
 app.include_router(assets_router)
 
 
