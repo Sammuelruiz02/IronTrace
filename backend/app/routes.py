@@ -1,15 +1,23 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
+from app.auth import get_current_user
 from app.database import get_database
 from app.models import Asset
 from app.schemas import AssetCreate, AssetResponse, AssetUpdate
+from app.user_models import User
 
-router = APIRouter(prefix="/assets", tags=["Assets"])
+router = APIRouter(
+    prefix="/assets",
+    tags=["Assets"],
+    dependencies=[Depends(get_current_user)],
+)
 
 
 @router.get("/", response_model=list[AssetResponse])
-def get_assets(database: Session = Depends(get_database)):
+def get_assets(
+    database: Session = Depends(get_database),
+):
     return database.query(Asset).order_by(Asset.id.desc()).all()
 
 
@@ -21,6 +29,7 @@ def get_assets(database: Session = Depends(get_database)):
 def create_asset(
     asset_data: AssetCreate,
     database: Session = Depends(get_database),
+    current_user: User = Depends(get_current_user),
 ):
     asset_number = asset_data.asset_number.strip()
 
@@ -54,8 +63,13 @@ def update_asset(
     asset_id: int,
     asset_data: AssetUpdate,
     database: Session = Depends(get_database),
+    current_user: User = Depends(get_current_user),
 ):
-    asset = database.query(Asset).filter(Asset.id == asset_id).first()
+    asset = (
+        database.query(Asset)
+        .filter(Asset.id == asset_id)
+        .first()
+    )
 
     if not asset:
         raise HTTPException(
@@ -104,8 +118,13 @@ def update_asset(
 def delete_asset(
     asset_id: int,
     database: Session = Depends(get_database),
+    current_user: User = Depends(get_current_user),
 ):
-    asset = database.query(Asset).filter(Asset.id == asset_id).first()
+    asset = (
+        database.query(Asset)
+        .filter(Asset.id == asset_id)
+        .first()
+    )
 
     if not asset:
         raise HTTPException(
