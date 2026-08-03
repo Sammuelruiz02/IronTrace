@@ -7,16 +7,30 @@ node_modules/
 **/node_modules/
 dist/
 **/dist/
+dist-ssr/
+**/dist-ssr/
 *.log
+*.local
 
 # Python / backend
 venv/
 **/venv/
+backend/venv/
 __pycache__/
 **/__pycache__/
 *.py[cod]
+.pytest_cache/
+
+# Environment variables
 .env
 .env.*
+backend/.env
+frontend/.env
+
+# Allow safe example environment files
+!.env.example
+!backend/.env.example
+!frontend/.env.example
 
 # IDE
 .vscode/
@@ -24,15 +38,3 @@ __pycache__/
 
 # Build / coverage
 coverage/
-.pytest_cache/
-
-# Python
-backend/venv/
-venv/
-__pycache__/
-*.py[cod]
-
-# Environment variables
-.env
-backend/.env
-frontend/.env
