@@ -10,15 +10,20 @@ from app.user_models import User
 router = APIRouter(
     prefix="/assets",
     tags=["Assets"],
-    dependencies=[Depends(get_current_user)],
 )
 
 
 @router.get("/", response_model=list[AssetResponse])
 def get_assets(
     database: Session = Depends(get_database),
+    current_user: User = Depends(get_current_user),
 ):
-    return database.query(Asset).order_by(Asset.id.desc()).all()
+    return (
+        database.query(Asset)
+        .filter(Asset.owner_id == current_user.id)
+        .order_by(Asset.id.desc())
+        .all()
+    )
 
 
 @router.post(
@@ -35,7 +40,10 @@ def create_asset(
 
     existing_asset = (
         database.query(Asset)
-        .filter(Asset.asset_number == asset_number)
+        .filter(
+            Asset.owner_id == current_user.id,
+            Asset.asset_number == asset_number,
+        )
         .first()
     )
 
@@ -46,6 +54,7 @@ def create_asset(
         )
 
     asset_values = asset_data.model_dump()
+    asset_values["owner_id"] = current_user.id
     asset_values["asset_number"] = asset_number
     asset_values["asset_name"] = asset_data.asset_name.strip()
 
@@ -67,7 +76,10 @@ def update_asset(
 ):
     asset = (
         database.query(Asset)
-        .filter(Asset.id == asset_id)
+        .filter(
+            Asset.id == asset_id,
+            Asset.owner_id == current_user.id,
+        )
         .first()
     )
 
@@ -85,6 +97,7 @@ def update_asset(
         duplicate_asset = (
             database.query(Asset)
             .filter(
+                Asset.owner_id == current_user.id,
                 Asset.asset_number == new_asset_number,
                 Asset.id != asset_id,
             )
@@ -122,7 +135,10 @@ def delete_asset(
 ):
     asset = (
         database.query(Asset)
-        .filter(Asset.id == asset_id)
+        .filter(
+            Asset.id == asset_id,
+            Asset.owner_id == current_user.id,
+        )
         .first()
     )
 
