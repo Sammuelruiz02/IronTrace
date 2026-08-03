@@ -1,0 +1,34 @@
+import os
+
+from dotenv import load_dotenv
+from sqlalchemy import create_engine
+from sqlalchemy.orm import declarative_base, sessionmaker
+
+load_dotenv()
+
+DATABASE_URL = os.getenv(
+    "DATABASE_URL",
+    "postgresql://irontrace:irontrace123@localhost:5432/irontrace",
+)
+
+engine = create_engine(
+    DATABASE_URL,
+    pool_pre_ping=True,
+)
+
+SessionLocal = sessionmaker(
+    autocommit=False,
+    autoflush=False,
+    bind=engine,
+)
+
+Base = declarative_base()
+
+
+def get_database():
+    database = SessionLocal()
+
+    try:
+        yield database
+    finally:
+        database.close()

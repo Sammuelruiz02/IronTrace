@@ -2,6 +2,7 @@ export type AssetStatus = "Online" | "Offline" | "Maintenance";
 export type GpsStatus = "Live" | "Offline" | "Unassigned";
 
 export type Asset = {
+  id: number;
   assetNumber: string;
   assetName: string;
   category: string;
@@ -13,6 +14,6 @@ export type Asset = {
   notes: string;
 };
 
-export type AssetFormValues = Omit<Asset, "lastSeen"> & {
+export type AssetFormValues = Omit<Asset, "id" | "lastSeen"> & {
   lastSeen?: string;
 };
