@@ -1,11 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import {
-  PackagePlus,
-  Radio,
-  TriangleAlert,
-  Wrench,
-} from "lucide-react";
-
+import { PackagePlus, Radio, TriangleAlert, Wrench } from "lucide-react";
 import Sidebar from "../components/Sidebar";
 import TopBar from "../components/TopBar";
 import AssetDetails from "../components/assets/AssetDetails";
@@ -13,14 +7,13 @@ import AssetForm from "../components/assets/AssetForm";
 import AssetTable from "../components/assets/AssetTable";
 import SearchBar from "../components/assets/SearchBar";
 import ConfirmDialog from "../components/ui/ConfirmDialog";
-
 import type {
   Asset,
   AssetFormValues,
   AssetStatus,
 } from "../types/asset";
 
-const API_URL = "http://127.0.0.1:8000/assets";
+const API_URL = `${import.meta.env.VITE_API_URL}/assets`;
 
 type StatusFilter = "All" | AssetStatus;
 
@@ -40,7 +33,6 @@ type ApiAsset = {
 
 function mapApiAsset(asset: ApiAsset): Asset {
   return {
-    id: asset.id,
     assetNumber: asset.asset_number,
     assetName: asset.asset_name,
     category: asset.category,
@@ -76,21 +68,13 @@ function mapFormValues(values: AssetFormValues) {
 function Assets() {
   const [assets, setAssets] = useState<Asset[]>([]);
   const [searchTerm, setSearchTerm] = useState("");
-  const [statusFilter, setStatusFilter] =
-    useState<StatusFilter>("All");
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>("All");
   const [projectFilter, setProjectFilter] = useState("All");
-
-  const [formMode, setFormMode] =
-    useState<"create" | "edit">("create");
-
+  const [formMode, setFormMode] = useState<"create" | "edit">("create");
   const [isFormOpen, setIsFormOpen] = useState(false);
-  const [editingAsset, setEditingAsset] =
-    useState<Asset | null>(null);
-  const [viewingAsset, setViewingAsset] =
-    useState<Asset | null>(null);
-  const [deletingAsset, setDeletingAsset] =
-    useState<Asset | null>(null);
-
+  const [editingAsset, setEditingAsset] = useState<Asset | null>(null);
+  const [viewingAsset, setViewingAsset] = useState<Asset | null>(null);
+  const [deletingAsset, setDeletingAsset] = useState<Asset | null>(null);
   const [formError, setFormError] = useState("");
   const [loading, setLoading] = useState(true);
   const [pageError, setPageError] = useState("");
@@ -108,7 +92,6 @@ function Assets() {
         }
 
         const data = (await response.json()) as ApiAsset[];
-
         setAssets(data.map(mapApiAsset));
       } catch {
         setPageError(
@@ -124,9 +107,9 @@ function Assets() {
 
   const projectOptions = useMemo(
     () =>
-      Array.from(
-        new Set(assets.map((asset) => asset.project)),
-      ).sort((a, b) => a.localeCompare(b)),
+      Array.from(new Set(assets.map((asset) => asset.project))).sort((a, b) =>
+        a.localeCompare(b),
+      ),
     [assets],
   );
 
@@ -142,30 +125,17 @@ function Assets() {
           asset.category,
           asset.project,
           asset.assignedTo,
-        ].some((value) =>
-          value.toLowerCase().includes(search),
-        );
+        ].some((value) => value.toLowerCase().includes(search));
 
       const matchesStatus =
-        statusFilter === "All" ||
-        asset.status === statusFilter;
+        statusFilter === "All" || asset.status === statusFilter;
 
       const matchesProject =
-        projectFilter === "All" ||
-        asset.project === projectFilter;
+        projectFilter === "All" || asset.project === projectFilter;
 
-      return (
-        matchesSearch &&
-        matchesStatus &&
-        matchesProject
-      );
+      return matchesSearch && matchesStatus && matchesProject;
     });
-  }, [
-    assets,
-    projectFilter,
-    searchTerm,
-    statusFilter,
-  ]);
+  }, [assets, projectFilter, searchTerm, statusFilter]);
 
   const openCreateForm = () => {
     setFormMode("create");
@@ -182,12 +152,9 @@ function Assets() {
     setIsFormOpen(true);
   };
 
-  const handleSaveAsset = async (
-    values: AssetFormValues,
-  ) => {
+  const handleSaveAsset = async (values: AssetFormValues) => {
     try {
       setFormError("");
-      setPageError("");
 
       if (formMode === "create") {
         const response = await fetch(`${API_URL}/`, {
@@ -199,9 +166,7 @@ function Assets() {
         });
 
         if (response.status === 409) {
-          setFormError(
-            `Asset #${values.assetNumber} already exists.`,
-          );
+          setFormError(`Asset #${values.assetNumber} already exists.`);
           return;
         }
 
@@ -213,30 +178,30 @@ function Assets() {
           (await response.json()) as ApiAsset,
         );
 
-        setAssets((current) => [
-          createdAsset,
-          ...current,
-        ]);
+        setAssets((current) => [createdAsset, ...current]);
       } else if (editingAsset) {
-        const response = await fetch(
-          `${API_URL}/${editingAsset.id}`,
-          {
-            method: "PUT",
-            headers: {
-              "Content-Type": "application/json",
-            },
-            body: JSON.stringify(
-              mapFormValues(values),
-            ),
-          },
+        const currentResponse = await fetch(`${API_URL}/`);
+
+        if (!currentResponse.ok) {
+          throw new Error("Unable to locate asset.");
+        }
+
+        const currentAssets = (await currentResponse.json()) as ApiAsset[];
+        const apiAsset = currentAssets.find(
+          (asset) => asset.asset_number === editingAsset.assetNumber,
         );
 
-        if (response.status === 409) {
-          setFormError(
-            `Asset #${values.assetNumber} already exists.`,
-          );
-          return;
+        if (!apiAsset) {
+          throw new Error("Asset not found.");
         }
+
+        const response = await fetch(`${API_URL}/${apiAsset.id}`, {
+          method: "PUT",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(mapFormValues(values)),
+        });
 
         if (!response.ok) {
           throw new Error("Unable to update asset.");
@@ -248,7 +213,7 @@ function Assets() {
 
         setAssets((current) =>
           current.map((asset) =>
-            asset.id === editingAsset.id
+            asset.assetNumber === editingAsset.assetNumber
               ? updatedAsset
               : asset,
           ),
@@ -266,19 +231,27 @@ function Assets() {
   };
 
   const handleDeleteAsset = async () => {
-    if (!deletingAsset) {
-      return;
-    }
+    if (!deletingAsset) return;
 
     try {
-      setPageError("");
+      const currentResponse = await fetch(`${API_URL}/`);
 
-      const response = await fetch(
-        `${API_URL}/${deletingAsset.id}`,
-        {
-          method: "DELETE",
-        },
+      if (!currentResponse.ok) {
+        throw new Error("Unable to locate asset.");
+      }
+
+      const currentAssets = (await currentResponse.json()) as ApiAsset[];
+      const apiAsset = currentAssets.find(
+        (asset) => asset.asset_number === deletingAsset.assetNumber,
       );
+
+      if (!apiAsset) {
+        throw new Error("Asset not found.");
+      }
+
+      const response = await fetch(`${API_URL}/${apiAsset.id}`, {
+        method: "DELETE",
+      });
 
       if (!response.ok && response.status !== 204) {
         throw new Error("Unable to delete asset.");
@@ -286,7 +259,7 @@ function Assets() {
 
       setAssets((current) =>
         current.filter(
-          (asset) => asset.id !== deletingAsset.id,
+          (asset) => asset.assetNumber !== deletingAsset.assetNumber,
         ),
       );
 
@@ -330,8 +303,7 @@ function Assets() {
                 </h1>
 
                 <p className="mt-2 text-sm text-slate-600">
-                  Track equipment assignments, GPS
-                  health, and jobsite status.
+                  Track equipment assignments, GPS health, and jobsite status.
                 </p>
               </div>
 
@@ -433,7 +405,7 @@ function Assets() {
 
       {isFormOpen && (
         <AssetForm
-          key={`${formMode}-${editingAsset?.id ?? "new"}`}
+          key={`${formMode}-${editingAsset?.assetNumber ?? "new"}`}
           mode={formMode}
           asset={editingAsset}
           errorMessage={formError}
@@ -472,11 +444,7 @@ type SummaryCardProps = {
   label: string;
   value: number;
   icon: React.ReactElement;
-  tone?:
-    | "default"
-    | "success"
-    | "danger"
-    | "warning";
+  tone?: "default" | "success" | "danger" | "warning";
 };
 
 const summaryTones = {
@@ -496,13 +464,8 @@ function SummaryCard({
     <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
       <div className="flex items-center justify-between">
         <div>
-          <p className="text-sm font-semibold text-slate-500">
-            {label}
-          </p>
-
-          <p className="mt-2 text-3xl font-bold text-slate-950">
-            {value}
-          </p>
+          <p className="text-sm font-semibold text-slate-500">{label}</p>
+          <p className="mt-2 text-3xl font-bold text-slate-950">{value}</p>
         </div>
 
         <div
