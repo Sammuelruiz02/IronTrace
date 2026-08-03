@@ -1,3 +1,5 @@
+import { useEffect, useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import {
   ArrowRight,
   MapPin,
@@ -7,10 +9,46 @@ import {
   Wrench,
 } from "lucide-react";
 
-import { getAuthenticatedUser } from "../auth";
+import {
+  clearAuthentication,
+  getAuthenticatedUser,
+  getAuthorizationHeaders,
+} from "../auth";
 import Sidebar from "../components/Sidebar";
 import StatCard from "../components/StatCard";
 import TopBar from "../components/TopBar";
+import type { Asset, AssetStatus } from "../types/asset";
+
+const API_URL = `${import.meta.env.VITE_API_URL}/assets`;
+
+type ApiAsset = {
+  id: number;
+  asset_number: string;
+  asset_name: string;
+  category: string;
+  project: string;
+  status: AssetStatus;
+  gps_status: Asset["gpsStatus"];
+  assigned_to: string;
+  last_seen: string;
+  notes: string;
+  created_at: string;
+};
+
+function mapApiAsset(asset: ApiAsset): Asset {
+  return {
+    id: asset.id,
+    assetNumber: asset.asset_number,
+    assetName: asset.asset_name,
+    category: asset.category,
+    project: asset.project,
+    status: asset.status,
+    gpsStatus: asset.gps_status,
+    assignedTo: asset.assigned_to,
+    lastSeen: asset.last_seen,
+    notes: asset.notes,
+  };
+}
 
 function getFirstName(fullName?: string) {
   if (!fullName) {
@@ -35,9 +73,91 @@ function getGreeting() {
 }
 
 function Dashboard() {
+  const navigate = useNavigate();
   const user = getAuthenticatedUser();
+
+  const [assets, setAssets] = useState<Asset[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [pageError, setPageError] = useState("");
+
   const firstName = getFirstName(user?.full_name);
   const greeting = getGreeting();
+
+  useEffect(() => {
+    const loadAssets = async () => {
+      try {
+        setLoading(true);
+        setPageError("");
+
+        const response = await fetch(`${API_URL}/`, {
+          headers: {
+            ...getAuthorizationHeaders(),
+          },
+        });
+
+        if (response.status === 401) {
+          clearAuthentication();
+          navigate("/login", { replace: true });
+          return;
+        }
+
+        if (!response.ok) {
+          throw new Error("Unable to load dashboard data.");
+        }
+
+        const data = (await response.json()) as ApiAsset[];
+        setAssets(data.map(mapApiAsset));
+      } catch {
+        setPageError(
+          "Could not load dashboard data. Make sure the IronTrace API is running.",
+        );
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    void loadAssets();
+  }, [navigate]);
+
+  const dashboardStats = useMemo(() => {
+    const totalAssets = assets.length;
+
+    const onlineAssets = assets.filter(
+      (asset) => asset.status === "Online",
+    ).length;
+
+    const offlineAssets = assets.filter(
+      (asset) => asset.status === "Offline",
+    ).length;
+
+    const maintenanceAssets = assets.filter(
+      (asset) => asset.status === "Maintenance",
+    ).length;
+
+    const activeProjects = new Set(
+      assets
+        .map((asset) => asset.project.trim())
+        .filter(
+          (project) =>
+            project &&
+            project.toLowerCase() !== "unassigned",
+        ),
+    ).size;
+
+    const reportingPercentage =
+      totalAssets > 0
+        ? Math.round((onlineAssets / totalAssets) * 100)
+        : 0;
+
+    return {
+      totalAssets,
+      onlineAssets,
+      offlineAssets,
+      maintenanceAssets,
+      activeProjects,
+      reportingPercentage,
+    };
+  }, [assets]);
 
   return (
     <div className="flex min-h-screen bg-slate-100">
@@ -58,37 +178,79 @@ function Dashboard() {
               </h1>
 
               <p className="mt-2 text-sm text-slate-600">
-                Here is the current condition of your tracked construction
-                assets.
+                Here is the current condition of your tracked
+                construction assets.
               </p>
             </div>
+
+            {pageError && (
+              <div className="mb-5 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-700">
+                {pageError}
+              </div>
+            )}
 
             <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
               <StatCard
                 title="Total assets"
-                value="126"
-                description="Across 8 active projects"
+                value={loading ? "—" : String(dashboardStats.totalAssets)}
+                description={
+                  loading
+                    ? "Loading project data"
+                    : `Across ${dashboardStats.activeProjects} active ${
+                        dashboardStats.activeProjects === 1
+                          ? "project"
+                          : "projects"
+                      }`
+                }
                 color="blue"
               />
 
               <StatCard
                 title="Online"
-                value="122"
-                description="96.8% reporting normally"
+                value={loading ? "—" : String(dashboardStats.onlineAssets)}
+                description={
+                  loading
+                    ? "Loading reporting status"
+                    : `${dashboardStats.reportingPercentage}% reporting normally`
+                }
                 color="green"
               />
 
               <StatCard
                 title="Offline"
-                value="4"
-                description="2 require attention"
+                value={loading ? "—" : String(dashboardStats.offlineAssets)}
+                description={
+                  loading
+                    ? "Loading offline assets"
+                    : `${
+                        dashboardStats.offlineAssets
+                      } ${
+                        dashboardStats.offlineAssets === 1
+                          ? "asset requires"
+                          : "assets require"
+                      } attention`
+                }
                 color="red"
               />
 
               <StatCard
-                title="Open alerts"
-                value="2"
-                description="1 high-priority alert"
+                title="Maintenance"
+                value={
+                  loading
+                    ? "—"
+                    : String(dashboardStats.maintenanceAssets)
+                }
+                description={
+                  loading
+                    ? "Loading maintenance status"
+                    : `${
+                        dashboardStats.maintenanceAssets
+                      } ${
+                        dashboardStats.maintenanceAssets === 1
+                          ? "asset is"
+                          : "assets are"
+                      } in maintenance`
+                }
                 color="orange"
               />
             </section>
@@ -108,7 +270,9 @@ function Dashboard() {
 
                   <span className="inline-flex items-center gap-2 rounded-full bg-emerald-50 px-3 py-1 text-xs font-bold text-emerald-700">
                     <Radio size={14} />
-                    122 live
+                    {loading
+                      ? "Loading"
+                      : `${dashboardStats.onlineAssets} live`}
                   </span>
                 </div>
 
@@ -136,8 +300,8 @@ function Dashboard() {
                     </p>
 
                     <p className="mt-1 max-w-sm text-sm text-slate-600">
-                      Asset markers, geofences, and movement trails will appear
-                      here.
+                      Asset markers, geofences, and movement trails
+                      will appear here.
                     </p>
                   </div>
                 </div>
@@ -146,45 +310,46 @@ function Dashboard() {
               <div className="rounded-xl border border-slate-200 bg-white shadow-sm">
                 <div className="flex items-center justify-between border-b border-slate-200 px-5 py-4">
                   <h2 className="font-bold text-slate-950">
-                    Recent activity
+                    Asset status
                   </h2>
 
                   <button
                     type="button"
+                    onClick={() => navigate("/assets")}
                     className="inline-flex items-center gap-1 text-xs font-bold text-blue-700 hover:underline"
                   >
-                    View all
+                    View assets
                     <ArrowRight size={14} />
                   </button>
                 </div>
 
                 <div className="divide-y divide-slate-100">
                   <Activity
-                    icon={<TriangleAlert size={18} />}
-                    tone="danger"
-                    title="Generator 04 went offline"
-                    detail="Airport Project · 18 minutes ago"
+                    icon={<Radio size={18} />}
+                    tone="success"
+                    title={`${dashboardStats.onlineAssets} online`}
+                    detail="Assets currently reporting normally"
                   />
 
                   <Activity
-                    icon={<MapPin size={18} />}
-                    tone="blue"
-                    title="Trailer 03 entered the geofence"
-                    detail="Disney Project · 32 minutes ago"
+                    icon={<TriangleAlert size={18} />}
+                    tone="danger"
+                    title={`${dashboardStats.offlineAssets} offline`}
+                    detail="Assets that may require attention"
                   />
 
                   <Activity
                     icon={<Wrench size={18} />}
                     tone="warning"
-                    title="Scissor Lift 07 maintenance due"
-                    detail="Universal Project · Due tomorrow"
+                    title={`${dashboardStats.maintenanceAssets} in maintenance`}
+                    detail="Equipment currently unavailable for service"
                   />
 
                   <Activity
-                    icon={<Radio size={18} />}
-                    tone="success"
-                    title="Forklift 02 reported a new location"
-                    detail="Disney Project · Live now"
+                    icon={<MapPin size={18} />}
+                    tone="blue"
+                    title={`${dashboardStats.activeProjects} active projects`}
+                    detail="Jobsites with assigned equipment"
                   />
                 </div>
               </div>
