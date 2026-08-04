@@ -33,7 +33,9 @@ router = APIRouter(
 
 
 def hash_tracker_secret(secret: str) -> str:
-    return hashlib.sha256(secret.encode("utf-8")).hexdigest()
+    return hashlib.sha256(
+        secret.encode("utf-8"),
+    ).hexdigest()
 
 
 def build_tracker_key() -> tuple[str, str, str]:
@@ -44,7 +46,9 @@ def build_tracker_key() -> tuple[str, str, str]:
     return key_id, secret, tracker_key
 
 
-def parse_tracker_key(tracker_key: str) -> tuple[str, str]:
+def parse_tracker_key(
+    tracker_key: str,
+) -> tuple[str, str]:
     prefix = "irontrace_"
 
     if not tracker_key.startswith(prefix):
@@ -95,7 +99,10 @@ def get_owned_asset(
     return asset
 
 
-@router.get("/", response_model=list[AssetResponse])
+@router.get(
+    "/",
+    response_model=list[AssetResponse],
+)
 def get_assets(
     database: Session = Depends(get_database),
     current_user: User = Depends(get_current_user),
@@ -132,13 +139,18 @@ def create_asset(
     if existing_asset:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
-            detail="An asset with this asset number already exists.",
+            detail=(
+                "An asset with this asset number "
+                "already exists."
+            ),
         )
 
     asset_values = asset_data.model_dump()
     asset_values["owner_id"] = current_user.id
     asset_values["asset_number"] = asset_number
-    asset_values["asset_name"] = asset_data.asset_name.strip()
+    asset_values["asset_name"] = (
+        asset_data.asset_name.strip()
+    )
 
     asset = Asset(**asset_values)
 
@@ -157,11 +169,16 @@ def update_gps_with_tracker_key(
     gps_data: TrackerGpsUpdate,
     x_tracker_key: str = Header(
         alias="X-Tracker-Key",
-        description="The tracker API key assigned to the asset.",
+        description=(
+            "The tracker API key assigned "
+            "to the asset."
+        ),
     ),
     database: Session = Depends(get_database),
 ):
-    key_id, secret = parse_tracker_key(x_tracker_key)
+    key_id, secret = parse_tracker_key(
+        x_tracker_key,
+    )
 
     asset = (
         database.query(Asset)
@@ -175,7 +192,9 @@ def update_gps_with_tracker_key(
             detail="Invalid tracker API key.",
         )
 
-    submitted_hash = hash_tracker_secret(secret)
+    submitted_hash = hash_tracker_secret(
+        secret,
+    )
 
     key_is_valid = hmac.compare_digest(
         submitted_hash,
@@ -246,7 +265,8 @@ def update_asset(
             database.query(Asset)
             .filter(
                 Asset.owner_id == current_user.id,
-                Asset.asset_number == new_asset_number,
+                Asset.asset_number
+                == new_asset_number,
                 Asset.id != asset_id,
             )
             .first()
@@ -261,7 +281,9 @@ def update_asset(
                 ),
             )
 
-        updates["asset_number"] = new_asset_number
+        updates["asset_number"] = (
+            new_asset_number
+        )
 
     if (
         "asset_name" in updates
@@ -331,11 +353,18 @@ def generate_tracker_key(
         current_user,
     )
 
-    key_id, secret, tracker_key = build_tracker_key()
-    created_at = datetime.now(timezone.utc)
+    key_id, secret, tracker_key = (
+        build_tracker_key()
+    )
+
+    created_at = datetime.now(
+        timezone.utc,
+    )
 
     asset.tracker_key_id = key_id
-    asset.tracker_key_hash = hash_tracker_secret(secret)
+    asset.tracker_key_hash = (
+        hash_tracker_secret(secret)
+    )
     asset.tracker_key_created_at = created_at
 
     database.commit()
@@ -347,6 +376,39 @@ def generate_tracker_key(
         tracker_key=tracker_key,
         created_at=created_at,
     )
+
+
+@router.delete(
+    "/{asset_id}/tracker-key",
+    status_code=status.HTTP_204_NO_CONTENT,
+)
+def disable_tracker_key(
+    asset_id: int,
+    database: Session = Depends(get_database),
+    current_user: User = Depends(get_current_user),
+):
+    asset = get_owned_asset(
+        asset_id,
+        database,
+        current_user,
+    )
+
+    if not asset.has_tracker_key:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=(
+                "This asset does not have "
+                "an active tracker key."
+            ),
+        )
+
+    asset.tracker_key_id = None
+    asset.tracker_key_hash = None
+    asset.tracker_key_created_at = None
+    asset.gps_status = "Unassigned"
+    asset.last_seen = "Tracker disabled"
+
+    database.commit()
 
 
 @router.delete(
