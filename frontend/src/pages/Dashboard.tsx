@@ -4,10 +4,17 @@ import {
   ArrowRight,
   MapPin,
   Radio,
-  Satellite,
   TriangleAlert,
   Wrench,
 } from "lucide-react";
+import L from "leaflet";
+import {
+  MapContainer,
+  Marker,
+  Popup,
+  TileLayer,
+  useMap,
+} from "react-leaflet";
 
 import {
   clearAuthentication,
@@ -17,9 +24,18 @@ import {
 import Sidebar from "../components/Sidebar";
 import StatCard from "../components/StatCard";
 import TopBar from "../components/TopBar";
-import type { Asset, AssetStatus } from "../types/asset";
+
+import type {
+  Asset,
+  AssetStatus,
+} from "../types/asset";
 
 const API_URL = `${import.meta.env.VITE_API_URL}/assets`;
+
+const DEFAULT_MAP_CENTER: [number, number] = [
+  28.291956,
+  -81.40757,
+];
 
 type ApiAsset = {
   id: number;
@@ -31,6 +47,9 @@ type ApiAsset = {
   gps_status: Asset["gpsStatus"];
   assigned_to: string;
   last_seen: string;
+  latitude: number | null;
+  longitude: number | null;
+  gps_updated_at: string | null;
   notes: string;
   created_at: string;
 };
@@ -46,7 +65,11 @@ function mapApiAsset(asset: ApiAsset): Asset {
     gpsStatus: asset.gps_status,
     assignedTo: asset.assigned_to,
     lastSeen: asset.last_seen,
+    latitude: asset.latitude,
+    longitude: asset.longitude,
+    gpsUpdatedAt: asset.gps_updated_at,
     notes: asset.notes,
+    createdAt: asset.created_at,
   };
 }
 
@@ -70,6 +93,112 @@ function getGreeting() {
   }
 
   return "Good evening";
+}
+
+function getMarkerColor(asset: Asset) {
+  if (asset.status === "Maintenance") {
+    return "#d97706";
+  }
+
+  if (
+    asset.status === "Offline" ||
+    asset.gpsStatus === "Offline"
+  ) {
+    return "#dc2626";
+  }
+
+  if (asset.gpsStatus === "Live") {
+    return "#059669";
+  }
+
+  return "#1d4ed8";
+}
+
+function createAssetMarker(asset: Asset) {
+  const color = getMarkerColor(asset);
+
+  return L.divIcon({
+    className: "",
+    html: `
+      <div
+        style="
+          width: 38px;
+          height: 38px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          border-radius: 9999px;
+          background: ${color};
+          border: 4px solid white;
+          box-shadow: 0 8px 18px rgba(15, 23, 42, 0.28);
+          color: white;
+          font-size: 16px;
+          font-weight: 800;
+        "
+        aria-label="Asset marker"
+      >
+        ${asset.assetNumber.slice(0, 3)}
+      </div>
+    `,
+    iconSize: [38, 38],
+    iconAnchor: [19, 19],
+    popupAnchor: [0, -22],
+  });
+}
+
+type FitMapToAssetsProps = {
+  assets: Asset[];
+};
+
+function FitMapToAssets({
+  assets,
+}: FitMapToAssetsProps) {
+  const map = useMap();
+
+  useEffect(() => {
+    if (assets.length === 0) {
+      map.setView(DEFAULT_MAP_CENTER, 11);
+      return;
+    }
+
+    if (assets.length === 1) {
+      const asset = assets[0];
+
+      if (
+        asset.latitude !== null &&
+        asset.longitude !== null
+      ) {
+        map.setView(
+          [asset.latitude, asset.longitude],
+          15,
+        );
+      }
+
+      return;
+    }
+
+    const bounds = L.latLngBounds(
+      assets
+        .filter(
+          (asset) =>
+            asset.latitude !== null &&
+            asset.longitude !== null,
+        )
+        .map((asset) => [
+          asset.latitude as number,
+          asset.longitude as number,
+        ]),
+    );
+
+    if (bounds.isValid()) {
+      map.fitBounds(bounds, {
+        padding: [45, 45],
+        maxZoom: 16,
+      });
+    }
+  }, [assets, map]);
+
+  return null;
 }
 
 function Dashboard() {
@@ -102,10 +231,14 @@ function Dashboard() {
         }
 
         if (!response.ok) {
-          throw new Error("Unable to load dashboard data.");
+          throw new Error(
+            "Unable to load dashboard data.",
+          );
         }
 
-        const data = (await response.json()) as ApiAsset[];
+        const data =
+          (await response.json()) as ApiAsset[];
+
         setAssets(data.map(mapApiAsset));
       } catch {
         setPageError(
@@ -118,6 +251,16 @@ function Dashboard() {
 
     void loadAssets();
   }, [navigate]);
+
+  const mappedAssets = useMemo(
+    () =>
+      assets.filter(
+        (asset) =>
+          asset.latitude !== null &&
+          asset.longitude !== null,
+      ),
+    [assets],
+  );
 
   const dashboardStats = useMemo(() => {
     const totalAssets = assets.length;
@@ -146,7 +289,9 @@ function Dashboard() {
 
     const reportingPercentage =
       totalAssets > 0
-        ? Math.round((onlineAssets / totalAssets) * 100)
+        ? Math.round(
+            (onlineAssets / totalAssets) * 100,
+          )
         : 0;
 
     return {
@@ -178,8 +323,8 @@ function Dashboard() {
               </h1>
 
               <p className="mt-2 text-sm text-slate-600">
-                Here is the current condition of your tracked
-                construction assets.
+                Here is the current condition of your
+                tracked construction assets.
               </p>
             </div>
 
@@ -192,12 +337,21 @@ function Dashboard() {
             <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
               <StatCard
                 title="Total assets"
-                value={loading ? "—" : String(dashboardStats.totalAssets)}
+                value={
+                  loading
+                    ? "—"
+                    : String(
+                        dashboardStats.totalAssets,
+                      )
+                }
                 description={
                   loading
                     ? "Loading project data"
-                    : `Across ${dashboardStats.activeProjects} active ${
-                        dashboardStats.activeProjects === 1
+                    : `Across ${
+                        dashboardStats.activeProjects
+                      } active ${
+                        dashboardStats.activeProjects ===
+                        1
                           ? "project"
                           : "projects"
                       }`
@@ -207,7 +361,13 @@ function Dashboard() {
 
               <StatCard
                 title="Online"
-                value={loading ? "—" : String(dashboardStats.onlineAssets)}
+                value={
+                  loading
+                    ? "—"
+                    : String(
+                        dashboardStats.onlineAssets,
+                      )
+                }
                 description={
                   loading
                     ? "Loading reporting status"
@@ -218,14 +378,21 @@ function Dashboard() {
 
               <StatCard
                 title="Offline"
-                value={loading ? "—" : String(dashboardStats.offlineAssets)}
+                value={
+                  loading
+                    ? "—"
+                    : String(
+                        dashboardStats.offlineAssets,
+                      )
+                }
                 description={
                   loading
                     ? "Loading offline assets"
                     : `${
                         dashboardStats.offlineAssets
                       } ${
-                        dashboardStats.offlineAssets === 1
+                        dashboardStats.offlineAssets ===
+                        1
                           ? "asset requires"
                           : "assets require"
                       } attention`
@@ -238,7 +405,9 @@ function Dashboard() {
                 value={
                   loading
                     ? "—"
-                    : String(dashboardStats.maintenanceAssets)
+                    : String(
+                        dashboardStats.maintenanceAssets,
+                      )
                 }
                 description={
                   loading
@@ -246,7 +415,8 @@ function Dashboard() {
                     : `${
                         dashboardStats.maintenanceAssets
                       } ${
-                        dashboardStats.maintenanceAssets === 1
+                        dashboardStats
+                          .maintenanceAssets === 1
                           ? "asset is"
                           : "assets are"
                       } in maintenance`
@@ -264,46 +434,116 @@ function Dashboard() {
                     </h2>
 
                     <p className="mt-1 text-xs text-slate-500">
-                      Mapbox integration is the next GPS milestone.
+                      Showing assets with available GPS
+                      coordinates.
                     </p>
                   </div>
 
                   <span className="inline-flex items-center gap-2 rounded-full bg-emerald-50 px-3 py-1 text-xs font-bold text-emerald-700">
                     <Radio size={14} />
+
                     {loading
                       ? "Loading"
-                      : `${dashboardStats.onlineAssets} live`}
+                      : `${mappedAssets.length} mapped`}
                   </span>
                 </div>
 
-                <div className="relative flex min-h-[470px] items-center justify-center overflow-hidden bg-[radial-gradient(circle_at_center,_#dbeafe_0,_#f8fafc_55%,_#e2e8f0_100%)]">
-                  <div className="absolute left-[18%] top-[28%] flex h-10 w-10 items-center justify-center rounded-full bg-blue-700 text-white shadow-lg ring-4 ring-blue-200">
-                    <MapPin size={20} />
-                  </div>
+                <div className="relative min-h-[470px]">
+                  {!loading &&
+                    mappedAssets.length === 0 && (
+                      <div className="absolute inset-0 z-[500] flex items-center justify-center bg-white/85 p-6 text-center backdrop-blur-sm">
+                        <div className="max-w-sm rounded-xl border border-slate-200 bg-white p-6 shadow-lg">
+                          <MapPin
+                            className="mx-auto text-blue-700"
+                            size={32}
+                          />
 
-                  <div className="absolute right-[24%] top-[38%] flex h-10 w-10 items-center justify-center rounded-full bg-orange-600 text-white shadow-lg ring-4 ring-orange-200">
-                    <MapPin size={20} />
-                  </div>
+                          <p className="mt-3 font-bold text-slate-950">
+                            No GPS locations available
+                          </p>
 
-                  <div className="absolute bottom-[25%] left-[48%] flex h-10 w-10 items-center justify-center rounded-full bg-emerald-600 text-white shadow-lg ring-4 ring-emerald-200">
-                    <MapPin size={20} />
-                  </div>
+                          <p className="mt-2 text-sm leading-6 text-slate-600">
+                            Assets will appear here after
+                            IronTrace receives their
+                            coordinates.
+                          </p>
+                        </div>
+                      </div>
+                    )}
 
-                  <div className="rounded-xl border border-white/80 bg-white/90 px-6 py-5 text-center shadow-lg backdrop-blur">
-                    <Satellite
-                      className="mx-auto text-blue-700"
-                      size={30}
+                  <MapContainer
+                    center={DEFAULT_MAP_CENTER}
+                    zoom={11}
+                    scrollWheelZoom
+                    className="h-[470px] w-full"
+                  >
+                    <TileLayer
+                      attribution='&copy; OpenStreetMap contributors'
+                      url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
                     />
 
-                    <p className="mt-3 font-bold text-slate-950">
-                      Live GPS map placeholder
-                    </p>
+                    <FitMapToAssets
+                      assets={mappedAssets}
+                    />
 
-                    <p className="mt-1 max-w-sm text-sm text-slate-600">
-                      Asset markers, geofences, and movement trails
-                      will appear here.
-                    </p>
-                  </div>
+                    {mappedAssets.map((asset) => (
+                      <Marker
+                        key={asset.id}
+                        position={[
+                          asset.latitude as number,
+                          asset.longitude as number,
+                        ]}
+                        icon={createAssetMarker(asset)}
+                      >
+                        <Popup>
+                          <div className="min-w-[210px]">
+                            <p className="text-xs font-bold uppercase tracking-wide text-blue-700">
+                              Asset #
+                              {asset.assetNumber}
+                            </p>
+
+                            <p className="mt-1 text-base font-bold text-slate-950">
+                              {asset.assetName}
+                            </p>
+
+                            <p className="mt-1 text-sm text-slate-600">
+                              {asset.project}
+                            </p>
+
+                            <div className="mt-3 space-y-1 text-sm text-slate-700">
+                              <p>
+                                <strong>Status:</strong>{" "}
+                                {asset.status}
+                              </p>
+
+                              <p>
+                                <strong>GPS:</strong>{" "}
+                                {asset.gpsStatus}
+                              </p>
+
+                              <p>
+                                <strong>
+                                  Assigned:
+                                </strong>{" "}
+                                {asset.assignedTo}
+                              </p>
+                            </div>
+
+                            <button
+                              type="button"
+                              onClick={() =>
+                                navigate("/assets")
+                              }
+                              className="mt-4 inline-flex items-center gap-1 font-bold text-blue-700 hover:underline"
+                            >
+                              View asset
+                              <ArrowRight size={14} />
+                            </button>
+                          </div>
+                        </Popup>
+                      </Marker>
+                    ))}
+                  </MapContainer>
                 </div>
               </div>
 
@@ -315,7 +555,9 @@ function Dashboard() {
 
                   <button
                     type="button"
-                    onClick={() => navigate("/assets")}
+                    onClick={() =>
+                      navigate("/assets")
+                    }
                     className="inline-flex items-center gap-1 text-xs font-bold text-blue-700 hover:underline"
                   >
                     View assets
@@ -332,7 +574,9 @@ function Dashboard() {
                   />
 
                   <Activity
-                    icon={<TriangleAlert size={18} />}
+                    icon={
+                      <TriangleAlert size={18} />
+                    }
                     tone="danger"
                     title={`${dashboardStats.offlineAssets} offline`}
                     detail="Assets that may require attention"
@@ -348,8 +592,8 @@ function Dashboard() {
                   <Activity
                     icon={<MapPin size={18} />}
                     tone="blue"
-                    title={`${dashboardStats.activeProjects} active projects`}
-                    detail="Jobsites with assigned equipment"
+                    title={`${mappedAssets.length} mapped assets`}
+                    detail="Assets with available GPS coordinates"
                   />
                 </div>
               </div>
@@ -363,14 +607,19 @@ function Dashboard() {
 
 type ActivityProps = {
   icon: React.ReactNode;
-  tone: "blue" | "success" | "danger" | "warning";
+  tone:
+    | "blue"
+    | "success"
+    | "danger"
+    | "warning";
   title: string;
   detail: string;
 };
 
 const activityTones = {
   blue: "bg-blue-50 text-blue-700",
-  success: "bg-emerald-50 text-emerald-700",
+  success:
+    "bg-emerald-50 text-emerald-700",
   danger: "bg-red-50 text-red-700",
   warning: "bg-amber-50 text-amber-800",
 };
