@@ -74,6 +74,56 @@ class AssetGpsUpdate(BaseModel):
         return self
 
 
+class TrackerKeyResponse(BaseModel):
+    asset_id: int
+    asset_number: str
+    tracker_key: str
+    created_at: datetime
+
+    description: str = (
+        "Store this key securely. It will only be shown once."
+    )
+
+
+class TrackerGpsUpdate(BaseModel):
+    latitude: float = Field(
+        ge=-90,
+        le=90,
+    )
+
+    longitude: float = Field(
+        ge=-180,
+        le=180,
+    )
+
+    recorded_at: datetime | None = None
+
+    gps_status: str = Field(
+        default="Live",
+        min_length=1,
+        max_length=50,
+    )
+
+    @model_validator(mode="after")
+    def validate_coordinates(self):
+        if self.latitude == 0 and self.longitude == 0:
+            raise ValueError(
+                "Latitude and longitude cannot both be zero."
+            )
+
+        return self
+
+
+class TrackerGpsResponse(BaseModel):
+    asset_id: int
+    asset_number: str
+    latitude: float
+    longitude: float
+    gps_updated_at: datetime
+    gps_status: str
+    message: str = "GPS location updated successfully."
+
+
 class AssetResponse(AssetBase):
     id: int
     created_at: datetime
