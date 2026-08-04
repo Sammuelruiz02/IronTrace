@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 
 class AssetBase(BaseModel):
@@ -12,6 +12,9 @@ class AssetBase(BaseModel):
     gps_status: str = "Unassigned"
     assigned_to: str = "Unassigned"
     last_seen: str = "No GPS assigned"
+    latitude: float | None = None
+    longitude: float | None = None
+    gps_updated_at: datetime | None = None
     notes: str = ""
 
 
@@ -28,7 +31,47 @@ class AssetUpdate(BaseModel):
     gps_status: str | None = None
     assigned_to: str | None = None
     last_seen: str | None = None
+    latitude: float | None = None
+    longitude: float | None = None
+    gps_updated_at: datetime | None = None
     notes: str | None = None
+
+
+class AssetGpsUpdate(BaseModel):
+    latitude: float = Field(
+        ge=-90,
+        le=90,
+        description="Latitude between -90 and 90.",
+    )
+
+    longitude: float = Field(
+        ge=-180,
+        le=180,
+        description="Longitude between -180 and 180.",
+    )
+
+    recorded_at: datetime | None = Field(
+        default=None,
+        description=(
+            "Time the GPS device recorded the location. "
+            "The server uses the current time when omitted."
+        ),
+    )
+
+    gps_status: str = Field(
+        default="Live",
+        min_length=1,
+        max_length=50,
+    )
+
+    @model_validator(mode="after")
+    def validate_coordinates(self):
+        if self.latitude == 0 and self.longitude == 0:
+            raise ValueError(
+                "Latitude and longitude cannot both be zero."
+            )
+
+        return self
 
 
 class AssetResponse(AssetBase):

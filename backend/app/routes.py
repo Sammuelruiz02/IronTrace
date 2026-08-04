@@ -1,10 +1,17 @@
+from datetime import datetime, timezone
+
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
 from app.auth import get_current_user
 from app.database import get_database
 from app.models import Asset
-from app.schemas import AssetCreate, AssetResponse, AssetUpdate
+from app.schemas import (
+    AssetCreate,
+    AssetGpsUpdate,
+    AssetResponse,
+    AssetUpdate,
+)
 from app.user_models import User
 
 router = APIRouter(
@@ -117,6 +124,45 @@ def update_asset(
 
     for field, value in updates.items():
         setattr(asset, field, value)
+
+    database.commit()
+    database.refresh(asset)
+
+    return asset
+
+
+@router.post(
+    "/{asset_id}/gps",
+    response_model=AssetResponse,
+)
+def update_asset_gps(
+    asset_id: int,
+    gps_data: AssetGpsUpdate,
+    database: Session = Depends(get_database),
+    current_user: User = Depends(get_current_user),
+):
+    asset = (
+        database.query(Asset)
+        .filter(
+            Asset.id == asset_id,
+            Asset.owner_id == current_user.id,
+        )
+        .first()
+    )
+
+    if not asset:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Asset not found.",
+        )
+
+    recorded_at = gps_data.recorded_at or datetime.now(timezone.utc)
+
+    asset.latitude = gps_data.latitude
+    asset.longitude = gps_data.longitude
+    asset.gps_updated_at = recorded_at
+    asset.gps_status = gps_data.gps_status.strip() or "Live"
+    asset.last_seen = "Live now"
 
     database.commit()
     database.refresh(asset)
