@@ -1,6 +1,7 @@
 from datetime import datetime, timezone
 
 from sqlalchemy import (
+    Boolean,
     DateTime,
     Float,
     ForeignKey,
@@ -32,7 +33,10 @@ class Asset(Base):
     )
 
     owner_id: Mapped[int] = mapped_column(
-        ForeignKey("users.id", ondelete="CASCADE"),
+        ForeignKey(
+            "users.id",
+            ondelete="CASCADE",
+        ),
         nullable=False,
         index=True,
     )
@@ -94,25 +98,69 @@ class Asset(Base):
         nullable=True,
     )
 
-    gps_updated_at: Mapped[datetime | None] = mapped_column(
+    gps_updated_at: Mapped[
+        datetime | None
+    ] = mapped_column(
         DateTime(timezone=True),
         nullable=True,
     )
 
-    tracker_key_id: Mapped[str | None] = mapped_column(
+    tracker_key_id: Mapped[
+        str | None
+    ] = mapped_column(
         String(50),
         nullable=True,
         unique=True,
         index=True,
     )
 
-    tracker_key_hash: Mapped[str | None] = mapped_column(
+    tracker_key_hash: Mapped[
+        str | None
+    ] = mapped_column(
         String(255),
         nullable=True,
     )
 
-    tracker_key_created_at: Mapped[datetime | None] = mapped_column(
+    tracker_key_created_at: Mapped[
+        datetime | None
+    ] = mapped_column(
         DateTime(timezone=True),
+        nullable=True,
+    )
+
+    geofence_enabled: Mapped[
+        bool
+    ] = mapped_column(
+        Boolean,
+        nullable=False,
+        default=False,
+    )
+
+    geofence_latitude: Mapped[
+        float | None
+    ] = mapped_column(
+        Float,
+        nullable=True,
+    )
+
+    geofence_longitude: Mapped[
+        float | None
+    ] = mapped_column(
+        Float,
+        nullable=True,
+    )
+
+    geofence_radius_meters: Mapped[
+        float | None
+    ] = mapped_column(
+        Float,
+        nullable=True,
+    )
+
+    geofence_state: Mapped[
+        str | None
+    ] = mapped_column(
+        String(50),
         nullable=True,
     )
 
@@ -125,5 +173,171 @@ class Asset(Base):
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,
-        default=lambda: datetime.now(timezone.utc),
+        default=lambda: datetime.now(
+            timezone.utc
+        ),
+    )
+
+    @property
+    def has_tracker_key(self) -> bool:
+        return bool(
+            self.tracker_key_hash
+        )
+
+
+class AssetLocation(Base):
+    __tablename__ = "asset_locations"
+
+    id: Mapped[int] = mapped_column(
+        Integer,
+        primary_key=True,
+        index=True,
+    )
+
+    asset_id: Mapped[int] = mapped_column(
+        ForeignKey(
+            "assets.id",
+            ondelete="CASCADE",
+        ),
+        nullable=False,
+        index=True,
+    )
+
+    latitude: Mapped[float] = mapped_column(
+        Float,
+        nullable=False,
+    )
+
+    longitude: Mapped[float] = mapped_column(
+        Float,
+        nullable=False,
+    )
+
+    gps_status: Mapped[str] = mapped_column(
+        String(50),
+        nullable=False,
+        default="Live",
+    )
+
+    recorded_at: Mapped[
+        datetime
+    ] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+    )
+
+    created_at: Mapped[
+        datetime
+    ] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        default=lambda: datetime.now(
+            timezone.utc
+        ),
+    )
+
+
+class GeofenceEvent(Base):
+    __tablename__ = "geofence_events"
+
+    id: Mapped[int] = mapped_column(
+        Integer,
+        primary_key=True,
+        index=True,
+    )
+
+    asset_id: Mapped[int] = mapped_column(
+        ForeignKey(
+            "assets.id",
+            ondelete="CASCADE",
+        ),
+        nullable=False,
+        index=True,
+    )
+
+    event_type: Mapped[str] = mapped_column(
+        String(50),
+        nullable=False,
+    )
+
+    geofence_status: Mapped[
+        str
+    ] = mapped_column(
+        String(50),
+        nullable=False,
+    )
+
+    latitude: Mapped[
+        float
+    ] = mapped_column(
+        Float,
+        nullable=False,
+    )
+
+    longitude: Mapped[
+        float
+    ] = mapped_column(
+        Float,
+        nullable=False,
+    )
+
+    distance_meters: Mapped[
+        float
+    ] = mapped_column(
+        Float,
+        nullable=False,
+    )
+
+    geofence_radius_meters: Mapped[
+        float
+    ] = mapped_column(
+        Float,
+        nullable=False,
+    )
+
+    recorded_at: Mapped[
+        datetime
+    ] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+    )
+
+    # -----------------------------------------
+    # BREACH ACKNOWLEDGEMENT
+    # -----------------------------------------
+
+    acknowledged: Mapped[
+        bool
+    ] = mapped_column(
+        Boolean,
+        nullable=False,
+        default=False,
+    )
+
+    acknowledged_at: Mapped[
+        datetime | None
+    ] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
+
+    acknowledged_by_user_id: Mapped[
+        int | None
+    ] = mapped_column(
+        ForeignKey(
+            "users.id",
+            ondelete="SET NULL",
+        ),
+        nullable=True,
+        index=True,
+    )
+
+    created_at: Mapped[
+        datetime
+    ] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        default=lambda: datetime.now(
+            timezone.utc
+        ),
     )

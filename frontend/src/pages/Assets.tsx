@@ -1,22 +1,34 @@
-import { useEffect, useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import {
+  useEffect,
+  useMemo,
+  useState,
+} from "react";
+
 import {
   PackagePlus,
   Radio,
+  ShieldAlert,
   TriangleAlert,
   Wrench,
 } from "lucide-react";
 
 import {
+  useNavigate,
+} from "react-router-dom";
+
+import {
   clearAuthentication,
   getAuthorizationHeaders,
 } from "../auth";
+
 import Sidebar from "../components/Sidebar";
 import TopBar from "../components/TopBar";
+
 import AssetDetails from "../components/assets/AssetDetails";
 import AssetForm from "../components/assets/AssetForm";
 import AssetTable from "../components/assets/AssetTable";
 import SearchBar from "../components/assets/SearchBar";
+
 import ConfirmDialog from "../components/ui/ConfirmDialog";
 
 import type {
@@ -25,514 +37,1607 @@ import type {
   AssetStatus,
 } from "../types/asset";
 
-const API_URL = `${import.meta.env.VITE_API_URL}/assets`;
 
-type StatusFilter = "All" | AssetStatus;
+const API_URL =
+  `${import.meta.env.VITE_API_URL}/assets`;
+
+const BREACH_REFRESH_INTERVAL =
+  10000;
+
+
+type StatusFilter =
+  | "All"
+  | AssetStatus;
+
 
 type ApiAsset = {
   id: number;
+
   asset_number: string;
   asset_name: string;
+
   category: string;
   project: string;
+
   status: AssetStatus;
   gps_status: Asset["gpsStatus"];
+
   assigned_to: string;
   last_seen: string;
+
+  latitude: number | null;
+  longitude: number | null;
+  gps_updated_at: string | null;
+
+  has_tracker_key: boolean;
+  tracker_key_created_at: string | null;
+
+  geofence_enabled: boolean;
+  geofence_latitude: number | null;
+  geofence_longitude: number | null;
+  geofence_radius_meters: number | null;
+
   notes: string;
   created_at: string;
 };
+
+
+type ApiGeofenceEvent = {
+  id: number;
+  asset_id: number;
+
+  event_type:
+    | "Entered"
+    | "Exited";
+
+  geofence_status:
+    | "Inside"
+    | "Outside";
+
+  recorded_at: string;
+
+  acknowledged: boolean;
+  acknowledged_at: string | null;
+  acknowledged_by_user_id: number | null;
+
+  acknowledged_by_name?: string | null;
+  acknowledged_by_email?: string | null;
+};
+
+
+type ActiveBreach = {
+  asset: Asset;
+  event: ApiGeofenceEvent;
+};
+
 
 type ApiError = {
   detail?: string;
 };
 
-function mapApiAsset(asset: ApiAsset): Asset {
+
+function mapApiAsset(
+  asset: ApiAsset,
+): Asset {
   return {
     id: asset.id,
-    assetNumber: asset.asset_number,
-    assetName: asset.asset_name,
-    category: asset.category,
-    project: asset.project,
-    status: asset.status,
-    gpsStatus: asset.gps_status,
-    assignedTo: asset.assigned_to,
-    lastSeen: asset.last_seen,
-    notes: asset.notes,
+
+    assetNumber:
+      asset.asset_number,
+
+    assetName:
+      asset.asset_name,
+
+    category:
+      asset.category,
+
+    project:
+      asset.project,
+
+    status:
+      asset.status,
+
+    gpsStatus:
+      asset.gps_status,
+
+    assignedTo:
+      asset.assigned_to,
+
+    lastSeen:
+      asset.last_seen,
+
+    latitude:
+      asset.latitude,
+
+    longitude:
+      asset.longitude,
+
+    gpsUpdatedAt:
+      asset.gps_updated_at,
+
+    hasTrackerKey:
+      asset.has_tracker_key,
+
+    trackerKeyCreatedAt:
+      asset.tracker_key_created_at,
+
+    geofenceEnabled:
+      asset.geofence_enabled,
+
+    geofenceLatitude:
+      asset.geofence_latitude,
+
+    geofenceLongitude:
+      asset.geofence_longitude,
+
+    geofenceRadiusMeters:
+      asset.geofence_radius_meters,
+
+    notes:
+      asset.notes,
+
+    createdAt:
+      asset.created_at,
   };
 }
 
-function mapFormValues(values: AssetFormValues) {
+
+function mapFormValues(
+  values: AssetFormValues,
+) {
+  const hasCoordinates =
+    values.latitude !== null &&
+    values.longitude !== null;
+
   return {
-    asset_number: values.assetNumber,
-    asset_name: values.assetName,
-    category: values.category,
-    project: values.project,
-    status: values.status,
-    gps_status: values.gpsStatus,
-    assigned_to: values.assignedTo,
+    asset_number:
+      values.assetNumber,
+
+    asset_name:
+      values.assetName,
+
+    category:
+      values.category,
+
+    project:
+      values.project,
+
+    status:
+      values.status,
+
+    gps_status:
+      values.gpsStatus,
+
+    assigned_to:
+      values.assignedTo,
+
     last_seen:
-      values.lastSeen ||
-      (values.gpsStatus === "Live"
+      values.gpsStatus === "Live"
         ? "Live now"
-        : values.gpsStatus === "Offline"
-          ? "Not reporting"
-          : "No GPS assigned"),
-    notes: values.notes,
+        : values.gpsStatus === "Stale"
+          ? "GPS signal stale"
+          : values.gpsStatus === "Offline"
+            ? "Not reporting"
+            : "No GPS assigned",
+
+    latitude:
+      values.latitude,
+
+    longitude:
+      values.longitude,
+
+    gps_updated_at:
+      hasCoordinates
+        ? new Date().toISOString()
+        : null,
+
+    geofence_enabled:
+      values.geofenceEnabled,
+
+    geofence_latitude:
+      values.geofenceEnabled
+        ? values.geofenceLatitude
+        : null,
+
+    geofence_longitude:
+      values.geofenceEnabled
+        ? values.geofenceLongitude
+        : null,
+
+    geofence_radius_meters:
+      values.geofenceEnabled
+        ? values.geofenceRadiusMeters
+        : null,
+
+    notes:
+      values.notes,
   };
 }
+
 
 async function getErrorMessage(
   response: Response,
   fallbackMessage: string,
 ): Promise<string> {
   try {
-    const errorData = (await response.json()) as ApiError;
-    return errorData.detail || fallbackMessage;
+    const errorData =
+      (await response.json()) as ApiError;
+
+    return (
+      errorData.detail ||
+      fallbackMessage
+    );
   } catch {
     return fallbackMessage;
   }
 }
 
+
 function Assets() {
-  const navigate = useNavigate();
+  const navigate =
+    useNavigate();
 
-  const [assets, setAssets] = useState<Asset[]>([]);
-  const [searchTerm, setSearchTerm] = useState("");
-  const [statusFilter, setStatusFilter] =
-    useState<StatusFilter>("All");
-  const [projectFilter, setProjectFilter] = useState("All");
 
-  const [formMode, setFormMode] =
-    useState<"create" | "edit">("create");
+  const [
+    assets,
+    setAssets,
+  ] =
+    useState<Asset[]>([]);
 
-  const [isFormOpen, setIsFormOpen] = useState(false);
-  const [editingAsset, setEditingAsset] =
-    useState<Asset | null>(null);
-  const [viewingAsset, setViewingAsset] =
-    useState<Asset | null>(null);
-  const [deletingAsset, setDeletingAsset] =
-    useState<Asset | null>(null);
 
-  const [formError, setFormError] = useState("");
-  const [loading, setLoading] = useState(true);
-  const [pageError, setPageError] = useState("");
+  const [
+    activeBreaches,
+    setActiveBreaches,
+  ] =
+    useState<
+      ActiveBreach[]
+    >([]);
 
-  const handleUnauthorized = () => {
-    clearAuthentication();
-    navigate("/login", { replace: true });
-  };
+
+  const [
+    breachLoading,
+    setBreachLoading,
+  ] =
+    useState(false);
+
+
+  const [
+    searchTerm,
+    setSearchTerm,
+  ] =
+    useState("");
+
+
+  const [
+    statusFilter,
+    setStatusFilter,
+  ] =
+    useState<StatusFilter>(
+      "All",
+    );
+
+
+  const [
+    projectFilter,
+    setProjectFilter,
+  ] =
+    useState("All");
+
+
+  const [
+    formMode,
+    setFormMode,
+  ] =
+    useState<
+      "create" | "edit"
+    >("create");
+
+
+  const [
+    isFormOpen,
+    setIsFormOpen,
+  ] =
+    useState(false);
+
+
+  const [
+    editingAsset,
+    setEditingAsset,
+  ] =
+    useState<
+      Asset | null
+    >(null);
+
+
+  const [
+    viewingAsset,
+    setViewingAsset,
+  ] =
+    useState<
+      Asset | null
+    >(null);
+
+
+  const [
+    deletingAsset,
+    setDeletingAsset,
+  ] =
+    useState<
+      Asset | null
+    >(null);
+
+
+  const [
+    formError,
+    setFormError,
+  ] =
+    useState("");
+
+
+  const [
+    loading,
+    setLoading,
+  ] =
+    useState(true);
+
+
+  const [
+    pageError,
+    setPageError,
+  ] =
+    useState("");
+
+
+  const handleUnauthorized =
+    () => {
+      clearAuthentication();
+
+      navigate(
+        "/login",
+        {
+          replace: true,
+        },
+      );
+    };
+
+
+  // -------------------------------------------------------
+  // LOAD ASSETS
+  // -------------------------------------------------------
+
 
   useEffect(() => {
-    const loadAssets = async () => {
-      try {
-        setLoading(true);
-        setPageError("");
+    const loadAssets =
+      async () => {
+        try {
+          setLoading(true);
 
-        const response = await fetch(`${API_URL}/`, {
-          headers: {
-            ...getAuthorizationHeaders(),
-          },
-        });
+          setPageError(
+            "",
+          );
 
-        if (response.status === 401) {
-          handleUnauthorized();
-          return;
+          const response =
+            await fetch(
+              `${API_URL}/`,
+              {
+                headers: {
+                  ...getAuthorizationHeaders(),
+                },
+              },
+            );
+
+          if (
+            response.status ===
+            401
+          ) {
+            handleUnauthorized();
+
+            return;
+          }
+
+          if (!response.ok) {
+            throw new Error(
+              "Unable to load assets.",
+            );
+          }
+
+          const data =
+            (await response.json()) as ApiAsset[];
+
+          setAssets(
+            data.map(
+              mapApiAsset,
+            ),
+          );
+        } catch {
+          setPageError(
+            "Could not connect to the IronTrace API. Make sure FastAPI is running.",
+          );
+        } finally {
+          setLoading(
+            false,
+          );
         }
-
-        if (!response.ok) {
-          throw new Error("Unable to load assets.");
-        }
-
-        const data = (await response.json()) as ApiAsset[];
-
-        setAssets(data.map(mapApiAsset));
-      } catch {
-        setPageError(
-          "Could not connect to the IronTrace API. Make sure FastAPI is running.",
-        );
-      } finally {
-        setLoading(false);
-      }
-    };
+      };
 
     void loadAssets();
   }, []);
 
-  const projectOptions = useMemo(
-    () =>
-      Array.from(
-        new Set(assets.map((asset) => asset.project)),
-      ).sort((a, b) => a.localeCompare(b)),
-    [assets],
-  );
 
-  const filteredAssets = useMemo(() => {
-    const search = searchTerm.trim().toLowerCase();
+  // -------------------------------------------------------
+  // ACTIVE GEOFENCE BREACH MONITOR
+  // -------------------------------------------------------
 
-    return assets.filter((asset) => {
-      const matchesSearch =
-        search.length === 0 ||
-        [
-          asset.assetNumber,
-          asset.assetName,
-          asset.category,
-          asset.project,
-          asset.assignedTo,
-        ].some((value) =>
-          value.toLowerCase().includes(search),
-        );
 
-      const matchesStatus =
-        statusFilter === "All" ||
-        asset.status === statusFilter;
-
-      const matchesProject =
-        projectFilter === "All" ||
-        asset.project === projectFilter;
-
-      return (
-        matchesSearch &&
-        matchesStatus &&
-        matchesProject
+  useEffect(() => {
+    if (
+      assets.length === 0
+    ) {
+      setActiveBreaches(
+        [],
       );
-    });
-  }, [
-    assets,
-    projectFilter,
-    searchTerm,
-    statusFilter,
-  ]);
 
-  const openCreateForm = () => {
-    setFormMode("create");
-    setEditingAsset(null);
-    setFormError("");
-    setIsFormOpen(true);
-  };
-
-  const openEditForm = (asset: Asset) => {
-    setViewingAsset(null);
-    setFormMode("edit");
-    setEditingAsset(asset);
-    setFormError("");
-    setIsFormOpen(true);
-  };
-
-  const handleSaveAsset = async (
-    values: AssetFormValues,
-  ) => {
-    try {
-      setFormError("");
-      setPageError("");
-
-      if (formMode === "create") {
-        const response = await fetch(`${API_URL}/`, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            ...getAuthorizationHeaders(),
-          },
-          body: JSON.stringify(mapFormValues(values)),
-        });
-
-        if (response.status === 401) {
-          handleUnauthorized();
-          return;
-        }
-
-        if (!response.ok) {
-          const message = await getErrorMessage(
-            response,
-            "The asset could not be created.",
-          );
-
-          setFormError(message);
-          return;
-        }
-
-        const createdAsset = mapApiAsset(
-          (await response.json()) as ApiAsset,
-        );
-
-        setAssets((current) => [
-          createdAsset,
-          ...current,
-        ]);
-      } else if (editingAsset) {
-        const response = await fetch(
-          `${API_URL}/${editingAsset.id}`,
-          {
-            method: "PUT",
-            headers: {
-              "Content-Type": "application/json",
-              ...getAuthorizationHeaders(),
-            },
-            body: JSON.stringify(
-              mapFormValues(values),
-            ),
-          },
-        );
-
-        if (response.status === 401) {
-          handleUnauthorized();
-          return;
-        }
-
-        if (!response.ok) {
-          const message = await getErrorMessage(
-            response,
-            "The asset could not be updated.",
-          );
-
-          setFormError(message);
-          return;
-        }
-
-        const updatedAsset = mapApiAsset(
-          (await response.json()) as ApiAsset,
-        );
-
-        setAssets((current) =>
-          current.map((asset) =>
-            asset.id === editingAsset.id
-              ? updatedAsset
-              : asset,
-          ),
-        );
-      }
-
-      setIsFormOpen(false);
-      setEditingAsset(null);
-      setFormError("");
-    } catch {
-      setFormError(
-        "The asset could not be saved. Make sure the API is running.",
-      );
-    }
-  };
-
-  const handleDeleteAsset = async () => {
-    if (!deletingAsset) {
       return;
     }
 
-    try {
-      setPageError("");
+    let active = true;
 
-      const response = await fetch(
-        `${API_URL}/${deletingAsset.id}`,
-        {
-          method: "DELETE",
-          headers: {
-            ...getAuthorizationHeaders(),
-          },
+
+    const loadBreaches =
+      async (
+        showLoading = false,
+      ) => {
+        try {
+          if (
+            showLoading
+          ) {
+            setBreachLoading(
+              true,
+            );
+          }
+
+          const assetsWithGeofences =
+            assets.filter(
+              (asset) =>
+                asset.geofenceEnabled,
+            );
+
+
+          const results =
+            await Promise.all(
+              assetsWithGeofences.map(
+                async (
+                  asset,
+                ) => {
+                  const response =
+                    await fetch(
+                      `${API_URL}/${asset.id}/geofence-events`,
+                      {
+                        headers: {
+                          ...getAuthorizationHeaders(),
+                        },
+                      },
+                    );
+
+
+                  if (
+                    response.status ===
+                    401
+                  ) {
+                    return {
+                      unauthorized:
+                        true,
+
+                      asset,
+
+                      events: [],
+                    };
+                  }
+
+
+                  if (
+                    !response.ok
+                  ) {
+                    return {
+                      unauthorized:
+                        false,
+
+                      asset,
+
+                      events: [],
+                    };
+                  }
+
+
+                  const events =
+                    (await response.json()) as ApiGeofenceEvent[];
+
+
+                  return {
+                    unauthorized:
+                      false,
+
+                    asset,
+
+                    events,
+                  };
+                },
+              ),
+            );
+
+
+          if (!active) {
+            return;
+          }
+
+
+          const unauthorized =
+            results.some(
+              (result) =>
+                result.unauthorized,
+            );
+
+
+          if (
+            unauthorized
+          ) {
+            handleUnauthorized();
+
+            return;
+          }
+
+
+          const breaches:
+            ActiveBreach[] =
+              [];
+
+
+          for (
+            const result
+            of results
+          ) {
+            const latestEvent =
+              result.events[0];
+
+
+            if (
+              !latestEvent
+            ) {
+              continue;
+            }
+
+
+            if (
+              latestEvent.event_type ===
+                "Exited" &&
+              !latestEvent.acknowledged
+            ) {
+              breaches.push(
+                {
+                  asset:
+                    result.asset,
+
+                  event:
+                    latestEvent,
+                },
+              );
+            }
+          }
+
+
+          setActiveBreaches(
+            breaches,
+          );
+        } catch {
+          // Keep the Assets page usable
+          // if the breach monitor fails.
+        } finally {
+          if (
+            active &&
+            showLoading
+          ) {
+            setBreachLoading(
+              false,
+            );
+          }
+        }
+      };
+
+
+    void loadBreaches(
+      true,
+    );
+
+
+    const intervalId =
+      window.setInterval(
+        () => {
+          void loadBreaches(
+            false,
+          );
+        },
+        BREACH_REFRESH_INTERVAL,
+      );
+
+
+    return () => {
+      active = false;
+
+      window.clearInterval(
+        intervalId,
+      );
+    };
+  }, [assets]);
+
+
+  // -------------------------------------------------------
+  // BREACHED ASSET IDS
+  // -------------------------------------------------------
+
+
+  const breachedAssetIds =
+    useMemo(
+      () =>
+        new Set(
+          activeBreaches.map(
+            (breach) =>
+              breach.asset.id,
+          ),
+        ),
+      [
+        activeBreaches,
+      ],
+    );
+
+
+  // -------------------------------------------------------
+  // PROJECT FILTER OPTIONS
+  // -------------------------------------------------------
+
+
+  const projectOptions =
+    useMemo(
+      () =>
+        Array.from(
+          new Set(
+            assets.map(
+              (asset) =>
+                asset.project,
+            ),
+          ),
+        ).sort(
+          (a, b) =>
+            a.localeCompare(
+              b,
+            ),
+        ),
+
+      [assets],
+    );
+
+
+  // -------------------------------------------------------
+  // FILTERED ASSETS
+  // -------------------------------------------------------
+
+
+  const filteredAssets =
+    useMemo(() => {
+      const search =
+        searchTerm
+          .trim()
+          .toLowerCase();
+
+
+      return assets.filter(
+        (asset) => {
+          const matchesSearch =
+            search.length ===
+              0 ||
+            [
+              asset.assetNumber,
+              asset.assetName,
+              asset.category,
+              asset.project,
+              asset.assignedTo,
+            ].some(
+              (value) =>
+                value
+                  .toLowerCase()
+                  .includes(
+                    search,
+                  ),
+            );
+
+
+          const matchesStatus =
+            statusFilter ===
+              "All" ||
+            asset.status ===
+              statusFilter;
+
+
+          const matchesProject =
+            projectFilter ===
+              "All" ||
+            asset.project ===
+              projectFilter;
+
+
+          return (
+            matchesSearch &&
+            matchesStatus &&
+            matchesProject
+          );
         },
       );
+    }, [
+      assets,
+      projectFilter,
+      searchTerm,
+      statusFilter,
+    ]);
 
-      if (response.status === 401) {
-        handleUnauthorized();
-        return;
-      }
 
-      if (!response.ok && response.status !== 204) {
-        const message = await getErrorMessage(
-          response,
-          "The asset could not be deleted.",
+  // -------------------------------------------------------
+  // FORMS
+  // -------------------------------------------------------
+
+
+  const openCreateForm =
+    () => {
+      setFormMode(
+        "create",
+      );
+
+      setEditingAsset(
+        null,
+      );
+
+      setFormError(
+        "",
+      );
+
+      setIsFormOpen(
+        true,
+      );
+    };
+
+
+  const openEditForm =
+    (
+      asset: Asset,
+    ) => {
+      setViewingAsset(
+        null,
+      );
+
+      setFormMode(
+        "edit",
+      );
+
+      setEditingAsset(
+        asset,
+      );
+
+      setFormError(
+        "",
+      );
+
+      setIsFormOpen(
+        true,
+      );
+    };
+
+
+  // -------------------------------------------------------
+  // SAVE ASSET
+  // -------------------------------------------------------
+
+
+  const handleSaveAsset =
+    async (
+      values:
+        AssetFormValues,
+    ) => {
+      try {
+        setFormError(
+          "",
         );
 
-        setPageError(message);
+        setPageError(
+          "",
+        );
+
+
+        if (
+          formMode ===
+          "create"
+        ) {
+          const response =
+            await fetch(
+              `${API_URL}/`,
+              {
+                method:
+                  "POST",
+
+                headers: {
+                  "Content-Type":
+                    "application/json",
+
+                  ...getAuthorizationHeaders(),
+                },
+
+                body:
+                  JSON.stringify(
+                    mapFormValues(
+                      values,
+                    ),
+                  ),
+              },
+            );
+
+
+          if (
+            response.status ===
+            401
+          ) {
+            handleUnauthorized();
+
+            return;
+          }
+
+
+          if (
+            !response.ok
+          ) {
+            const message =
+              await getErrorMessage(
+                response,
+                "The asset could not be created.",
+              );
+
+            setFormError(
+              message,
+            );
+
+            return;
+          }
+
+
+          const createdAsset =
+            mapApiAsset(
+              (await response.json()) as ApiAsset,
+            );
+
+
+          setAssets(
+            (current) => [
+              createdAsset,
+              ...current,
+            ],
+          );
+        }
+
+
+        else if (
+          editingAsset
+        ) {
+          const response =
+            await fetch(
+              `${API_URL}/${editingAsset.id}`,
+              {
+                method:
+                  "PUT",
+
+                headers: {
+                  "Content-Type":
+                    "application/json",
+
+                  ...getAuthorizationHeaders(),
+                },
+
+                body:
+                  JSON.stringify(
+                    mapFormValues(
+                      values,
+                    ),
+                  ),
+              },
+            );
+
+
+          if (
+            response.status ===
+            401
+          ) {
+            handleUnauthorized();
+
+            return;
+          }
+
+
+          if (
+            !response.ok
+          ) {
+            const message =
+              await getErrorMessage(
+                response,
+                "The asset could not be updated.",
+              );
+
+            setFormError(
+              message,
+            );
+
+            return;
+          }
+
+
+          const updatedAsset =
+            mapApiAsset(
+              (await response.json()) as ApiAsset,
+            );
+
+
+          setAssets(
+            (current) =>
+              current.map(
+                (asset) =>
+                  asset.id ===
+                  editingAsset.id
+                    ? updatedAsset
+                    : asset,
+              ),
+          );
+        }
+
+
+        setIsFormOpen(
+          false,
+        );
+
+        setEditingAsset(
+          null,
+        );
+
+        setFormError(
+          "",
+        );
+      } catch {
+        setFormError(
+          "The asset could not be saved. Make sure the API is running.",
+        );
+      }
+    };
+
+
+  // -------------------------------------------------------
+  // DELETE ASSET
+  // -------------------------------------------------------
+
+
+  const handleDeleteAsset =
+    async () => {
+      if (
+        !deletingAsset
+      ) {
         return;
       }
 
-      setAssets((current) =>
-        current.filter(
-          (asset) => asset.id !== deletingAsset.id,
-        ),
+
+      try {
+        setPageError(
+          "",
+        );
+
+
+        const response =
+          await fetch(
+            `${API_URL}/${deletingAsset.id}`,
+            {
+              method:
+                "DELETE",
+
+              headers: {
+                ...getAuthorizationHeaders(),
+              },
+            },
+          );
+
+
+        if (
+          response.status ===
+          401
+        ) {
+          handleUnauthorized();
+
+          return;
+        }
+
+
+        if (
+          !response.ok &&
+          response.status !==
+            204
+        ) {
+          const message =
+            await getErrorMessage(
+              response,
+              "The asset could not be deleted.",
+            );
+
+          setPageError(
+            message,
+          );
+
+          return;
+        }
+
+
+        setAssets(
+          (current) =>
+            current.filter(
+              (asset) =>
+                asset.id !==
+                deletingAsset.id,
+            ),
+        );
+
+
+        setActiveBreaches(
+          (current) =>
+            current.filter(
+              (breach) =>
+                breach.asset.id !==
+                deletingAsset.id,
+            ),
+        );
+
+
+        setDeletingAsset(
+          null,
+        );
+      } catch {
+        setPageError(
+          "The asset could not be deleted. Make sure the API is running.",
+        );
+      }
+    };
+
+
+  // -------------------------------------------------------
+  // GEOFENCE ACKNOWLEDGED
+  // -------------------------------------------------------
+
+
+  const handleGeofenceAcknowledged =
+    (
+      assetId: number,
+    ) => {
+      setActiveBreaches(
+        (current) =>
+          current.filter(
+            (breach) =>
+              breach.asset.id !==
+              assetId,
+          ),
       );
+    };
 
-      setDeletingAsset(null);
-    } catch {
-      setPageError(
-        "The asset could not be deleted. Make sure the API is running.",
-      );
-    }
-  };
 
-  const onlineCount = assets.filter(
-    (asset) => asset.status === "Online",
-  ).length;
+  // -------------------------------------------------------
+  // SUMMARY NUMBERS
+  // -------------------------------------------------------
 
-  const offlineCount = assets.filter(
-    (asset) => asset.status === "Offline",
-  ).length;
 
-  const maintenanceCount = assets.filter(
-    (asset) => asset.status === "Maintenance",
-  ).length;
+  const onlineCount =
+    assets.filter(
+      (asset) =>
+        asset.status ===
+        "Online",
+    ).length;
+
+
+  const offlineCount =
+    assets.filter(
+      (asset) =>
+        asset.status ===
+        "Offline",
+    ).length;
+
+
+  const maintenanceCount =
+    assets.filter(
+      (asset) =>
+        asset.status ===
+        "Maintenance",
+    ).length;
+
+
+  // -------------------------------------------------------
+  // PAGE
+  // -------------------------------------------------------
+
 
   return (
     <div className="flex min-h-screen bg-slate-100">
+
       <Sidebar />
 
+
       <div className="min-w-0 flex-1">
-        <TopBar title="Assets" />
+
+        <TopBar
+          title="Assets"
+        />
+
 
         <main className="p-5 sm:p-7 lg:p-8">
+
           <div className="mx-auto max-w-[1600px]">
+
+
             <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+
               <div>
+
                 <p className="text-sm font-bold uppercase tracking-widest text-blue-700">
                   Equipment management
                 </p>
+
 
                 <h1 className="mt-1 text-3xl font-bold tracking-tight text-slate-950">
                   Assets
                 </h1>
 
+
                 <p className="mt-2 text-sm text-slate-600">
-                  Track equipment assignments, GPS
-                  health, and jobsite status.
+                  Track equipment assignments,
+                  GPS health, geofence security,
+                  and jobsite status.
                 </p>
+
               </div>
+
 
               <button
                 type="button"
-                onClick={openCreateForm}
+                onClick={
+                  openCreateForm
+                }
                 className="inline-flex h-11 items-center justify-center gap-2 rounded-lg bg-orange-600 px-5 text-sm font-bold text-white shadow-sm transition hover:bg-orange-700 focus:outline-none focus:ring-2 focus:ring-orange-300"
               >
-                <PackagePlus size={18} />
+
+                <PackagePlus
+                  size={18}
+                />
+
                 Add asset
+
               </button>
+
             </div>
 
+
             {pageError && (
+
               <div className="mb-5 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-700">
                 {pageError}
               </div>
+
             )}
 
-            <section className="mb-5 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+
+            {/* ---------------------------------------------
+                ACTIVE BREACH ALERT
+            ---------------------------------------------- */}
+
+            {!breachLoading &&
+              activeBreaches.length >
+                0 && (
+
+              <div className="mb-5 rounded-xl border-2 border-red-400 bg-red-50 p-5 shadow-sm">
+
+                <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+
+
+                  <div className="flex items-start gap-4">
+
+                    <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-red-600 text-white">
+
+                      <ShieldAlert
+                        size={25}
+                      />
+
+                    </div>
+
+
+                    <div>
+
+                      <p className="text-xs font-black uppercase tracking-widest text-red-600">
+                        Security Alert
+                      </p>
+
+
+                      <h2 className="mt-1 text-xl font-black text-red-950">
+
+                        {activeBreaches.length ===
+                        1
+                          ? "1 Unacknowledged Geofence Breach"
+                          : `${activeBreaches.length} Unacknowledged Geofence Breaches`}
+
+                      </h2>
+
+
+                      <p className="mt-1 text-sm font-medium text-red-800">
+                        One or more assets are
+                        currently outside their
+                        authorized jobsite boundary
+                        and require review.
+                      </p>
+
+                    </div>
+
+                  </div>
+
+
+                  <div className="flex flex-wrap gap-2">
+
+                    {activeBreaches
+                      .slice(
+                        0,
+                        3,
+                      )
+                      .map(
+                        (
+                          breach,
+                        ) => (
+
+                        <button
+                          key={
+                            breach.event.id
+                          }
+                          type="button"
+                          onClick={() =>
+                            setViewingAsset(
+                              breach.asset,
+                            )
+                          }
+                          className="rounded-lg border border-red-300 bg-white px-4 py-2 text-sm font-bold text-red-700 shadow-sm transition hover:bg-red-100"
+                        >
+
+                          View{" "}
+
+                          {
+                            breach.asset.assetName
+                          }
+
+                        </button>
+
+                      ),
+                    )}
+
+                  </div>
+
+                </div>
+
+              </div>
+
+            )}
+
+
+            {/* ---------------------------------------------
+                SUMMARY CARDS
+            ---------------------------------------------- */}
+
+            <section className="mb-5 grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
+
               <SummaryCard
                 label="Total assets"
-                value={assets.length}
-                icon={<PackagePlus />}
+                value={
+                  assets.length
+                }
+                icon={
+                  <PackagePlus />
+                }
               />
+
 
               <SummaryCard
                 label="Online"
-                value={onlineCount}
-                icon={<Radio />}
+                value={
+                  onlineCount
+                }
+                icon={
+                  <Radio />
+                }
                 tone="success"
               />
 
+
               <SummaryCard
                 label="Offline"
-                value={offlineCount}
-                icon={<TriangleAlert />}
+                value={
+                  offlineCount
+                }
+                icon={
+                  <TriangleAlert />
+                }
                 tone="danger"
               />
 
+
               <SummaryCard
                 label="Maintenance"
-                value={maintenanceCount}
-                icon={<Wrench />}
+                value={
+                  maintenanceCount
+                }
+                icon={
+                  <Wrench />
+                }
                 tone="warning"
               />
+
+
+              <SummaryCard
+                label="Active breaches"
+                value={
+                  activeBreaches.length
+                }
+                icon={
+                  <ShieldAlert />
+                }
+                tone={
+                  activeBreaches.length >
+                  0
+                    ? "danger"
+                    : "success"
+                }
+              />
+
             </section>
 
+
+            {/* ---------------------------------------------
+                SEARCH
+            ---------------------------------------------- */}
+
             <div className="mb-4">
+
               <SearchBar
-                searchTerm={searchTerm}
-                statusFilter={statusFilter}
-                projectFilter={projectFilter}
-                projectOptions={projectOptions}
-                onSearchChange={setSearchTerm}
-                onStatusChange={setStatusFilter}
-                onProjectChange={setProjectFilter}
+                searchTerm={
+                  searchTerm
+                }
+                statusFilter={
+                  statusFilter
+                }
+                projectFilter={
+                  projectFilter
+                }
+                projectOptions={
+                  projectOptions
+                }
+                onSearchChange={
+                  setSearchTerm
+                }
+                onStatusChange={
+                  setStatusFilter
+                }
+                onProjectChange={
+                  setProjectFilter
+                }
                 onClear={() => {
-                  setSearchTerm("");
-                  setStatusFilter("All");
-                  setProjectFilter("All");
+
+                  setSearchTerm(
+                    "",
+                  );
+
+                  setStatusFilter(
+                    "All",
+                  );
+
+                  setProjectFilter(
+                    "All",
+                  );
+
                 }}
               />
+
             </div>
+
 
             <div className="mb-3 flex items-center justify-between text-sm text-slate-600">
+
               <p>
+
                 Showing{" "}
+
                 <span className="font-bold text-slate-900">
-                  {filteredAssets.length}
+                  {
+                    filteredAssets.length
+                  }
                 </span>{" "}
+
                 of{" "}
+
                 <span className="font-bold text-slate-900">
-                  {assets.length}
+                  {
+                    assets.length
+                  }
                 </span>{" "}
+
                 assets
+
               </p>
+
 
               <p className="hidden sm:block">
-                Data is saved securely in PostgreSQL.
+                Data is saved securely
+                in PostgreSQL.
               </p>
+
             </div>
 
+
+            {/* ---------------------------------------------
+                ASSET TABLE
+            ---------------------------------------------- */}
+
             {loading ? (
+
               <div className="rounded-xl border border-slate-200 bg-white p-10 text-center text-sm font-semibold text-slate-500 shadow-sm">
                 Loading assets...
               </div>
+
             ) : (
+
               <AssetTable
-                assets={filteredAssets}
-                onView={setViewingAsset}
-                onEdit={openEditForm}
-                onDelete={setDeletingAsset}
+                assets={
+                  filteredAssets
+                }
+
+                onView={
+                  setViewingAsset
+                }
+
+                onEdit={
+                  openEditForm
+                }
+
+                onDelete={
+                  setDeletingAsset
+                }
+
+                breachedAssetIds={
+                  breachedAssetIds
+                }
               />
+
             )}
+
           </div>
+
         </main>
+
       </div>
 
+
+      {/* -----------------------------------------------
+          CREATE / EDIT FORM
+      ------------------------------------------------ */}
+
       {isFormOpen && (
+
         <AssetForm
           key={`${formMode}-${editingAsset?.id ?? "new"}`}
-          mode={formMode}
-          asset={editingAsset}
-          errorMessage={formError}
+
+          mode={
+            formMode
+          }
+
+          asset={
+            editingAsset
+          }
+
+          errorMessage={
+            formError
+          }
+
           onClose={() => {
-            setIsFormOpen(false);
-            setEditingAsset(null);
-            setFormError("");
+
+            setIsFormOpen(
+              false,
+            );
+
+            setEditingAsset(
+              null,
+            );
+
+            setFormError(
+              "",
+            );
+
           }}
-          onSubmit={handleSaveAsset}
+
+          onSubmit={
+            handleSaveAsset
+          }
         />
+
       )}
 
+
+      {/* -----------------------------------------------
+          ASSET DETAILS
+      ------------------------------------------------ */}
+
       <AssetDetails
-        asset={viewingAsset}
-        onClose={() => setViewingAsset(null)}
-        onEdit={openEditForm}
+        asset={
+          viewingAsset
+        }
+
+        onClose={() =>
+          setViewingAsset(
+            null,
+          )
+        }
+
+        onEdit={
+          openEditForm
+        }
+
+        onGeofenceAcknowledged={
+          handleGeofenceAcknowledged
+        }
       />
 
+
+      {/* -----------------------------------------------
+          DELETE CONFIRMATION
+      ------------------------------------------------ */}
+
       <ConfirmDialog
-        open={Boolean(deletingAsset)}
+        open={
+          Boolean(
+            deletingAsset,
+          )
+        }
+
         title="Delete this asset?"
+
         description={
           deletingAsset
             ? `${deletingAsset.assetName} (#${deletingAsset.assetNumber}) will be removed from IronTrace. This action cannot be undone.`
             : ""
         }
+
         confirmLabel="Delete asset"
-        onCancel={() => setDeletingAsset(null)}
-        onConfirm={handleDeleteAsset}
+
+        onCancel={() =>
+          setDeletingAsset(
+            null,
+          )
+        }
+
+        onConfirm={
+          handleDeleteAsset
+        }
       />
+
     </div>
   );
 }
 
+
 type SummaryCardProps = {
   label: string;
+
   value: number;
-  icon: React.ReactElement;
+
+  icon:
+    React.ReactElement;
+
   tone?:
     | "default"
     | "success"
@@ -540,12 +1645,21 @@ type SummaryCardProps = {
     | "warning";
 };
 
+
 const summaryTones = {
-  default: "bg-blue-50 text-blue-700",
-  success: "bg-emerald-50 text-emerald-700",
-  danger: "bg-red-50 text-red-700",
-  warning: "bg-amber-50 text-amber-800",
+  default:
+    "bg-blue-50 text-blue-700",
+
+  success:
+    "bg-emerald-50 text-emerald-700",
+
+  danger:
+    "bg-red-50 text-red-700",
+
+  warning:
+    "bg-amber-50 text-amber-800",
 };
+
 
 function SummaryCard({
   label,
@@ -554,26 +1668,37 @@ function SummaryCard({
   tone = "default",
 }: SummaryCardProps) {
   return (
+
     <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+
       <div className="flex items-center justify-between">
+
         <div>
+
           <p className="text-sm font-semibold text-slate-500">
             {label}
           </p>
 
+
           <p className="mt-2 text-3xl font-bold text-slate-950">
             {value}
           </p>
+
         </div>
+
 
         <div
           className={`flex h-11 w-11 items-center justify-center rounded-xl ${summaryTones[tone]}`}
         >
           {icon}
         </div>
+
       </div>
+
     </div>
+
   );
 }
+
 
 export default Assets;
