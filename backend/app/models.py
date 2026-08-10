@@ -189,10 +189,9 @@ class AssetLocation(Base):
     __tablename__ = "asset_locations"
 
     id: Mapped[int] = mapped_column(
-        Integer,
-        primary_key=True,
-        index=True,
-    )
+    Integer,
+    primary_key=True,
+)
 
     asset_id: Mapped[int] = mapped_column(
         ForeignKey(
@@ -224,6 +223,7 @@ class AssetLocation(Base):
     ] = mapped_column(
         DateTime(timezone=True),
         nullable=False,
+        index=True,
     )
 
     created_at: Mapped[
@@ -300,11 +300,8 @@ class GeofenceEvent(Base):
     ] = mapped_column(
         DateTime(timezone=True),
         nullable=False,
+        index=True,
     )
-
-    # -----------------------------------------
-    # BREACH ACKNOWLEDGEMENT
-    # -----------------------------------------
 
     acknowledged: Mapped[
         bool
