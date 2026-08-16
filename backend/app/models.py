@@ -88,6 +88,163 @@ class Project(Base):
 
 
 # ---------------------------------------------------------
+# TRACKER DEVICE
+# ---------------------------------------------------------
+
+
+class TrackerDevice(Base):
+    __tablename__ = "tracker_devices"
+
+    __table_args__ = (
+        # A company cannot register the same serial
+        # number more than once.
+        UniqueConstraint(
+            "organization_id",
+            "serial_number",
+            name="uq_tracker_devices_organization_serial",
+        ),
+
+        # Provider device IDs only need to be unique
+        # within the same provider.
+        UniqueConstraint(
+            "provider",
+            "provider_device_id",
+            name="uq_tracker_devices_provider_device_id",
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(
+        Integer,
+        primary_key=True,
+    )
+
+    # -----------------------------------------------------
+    # ORGANIZATION
+    # -----------------------------------------------------
+
+    organization_id: Mapped[int] = mapped_column(
+        ForeignKey(
+            "organizations.id",
+            ondelete="CASCADE",
+        ),
+        nullable=False,
+        index=True,
+    )
+
+    # -----------------------------------------------------
+    # ASSET ASSIGNMENT
+    # -----------------------------------------------------
+    #
+    # A tracker can be stored in inventory without being
+    # assigned to an asset.
+    #
+    # unique=True means one asset can only have one
+    # TrackerDevice assigned through this table.
+
+    asset_id: Mapped[
+        int | None
+    ] = mapped_column(
+        ForeignKey(
+            "assets.id",
+            ondelete="SET NULL",
+        ),
+        nullable=True,
+        unique=True,
+        index=True,
+    )
+
+    # -----------------------------------------------------
+    # DEVICE IDENTITY
+    # -----------------------------------------------------
+
+    device_name: Mapped[str] = mapped_column(
+        String(150),
+        nullable=False,
+    )
+
+    serial_number: Mapped[str] = mapped_column(
+        String(100),
+        nullable=False,
+    )
+
+    provider: Mapped[str] = mapped_column(
+        String(100),
+        nullable=False,
+        default="Manual",
+    )
+
+    provider_device_id: Mapped[
+        str | None
+    ] = mapped_column(
+        String(150),
+        nullable=True,
+    )
+
+    # -----------------------------------------------------
+    # CELLULAR / HARDWARE INFORMATION
+    # -----------------------------------------------------
+
+    imei: Mapped[
+        str | None
+    ] = mapped_column(
+        String(50),
+        nullable=True,
+        unique=True,
+        index=True,
+    )
+
+    sim_iccid: Mapped[
+        str | None
+    ] = mapped_column(
+        String(50),
+        nullable=True,
+        unique=True,
+        index=True,
+    )
+
+    # -----------------------------------------------------
+    # DEVICE STATUS
+    # -----------------------------------------------------
+
+    status: Mapped[str] = mapped_column(
+        String(50),
+        nullable=False,
+        default="Active",
+    )
+
+    last_communication_at: Mapped[
+        datetime | None
+    ] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+        index=True,
+    )
+
+    assigned_at: Mapped[
+        datetime | None
+    ] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
+
+    notes: Mapped[str] = mapped_column(
+        Text,
+        nullable=False,
+        default="",
+    )
+
+    created_at: Mapped[
+        datetime
+    ] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        default=lambda: datetime.now(
+            timezone.utc
+        ),
+    )
+
+
+# ---------------------------------------------------------
 # ASSET
 # ---------------------------------------------------------
 
@@ -98,9 +255,8 @@ class Asset(Base):
     __table_args__ = (
         # Legacy user-level uniqueness.
         #
-        # We are keeping this temporarily while
-        # transitioning completely to organization
-        # ownership.
+        # Kept temporarily during the organization
+        # ownership transition.
         UniqueConstraint(
             "owner_id",
             "asset_number",
@@ -173,9 +329,6 @@ class Asset(Base):
     # -----------------------------------------------------
     # LEGACY PROJECT NAME
     # -----------------------------------------------------
-    #
-    # Keep this temporarily while we migrate existing
-    # project strings into the projects table.
 
     project: Mapped[str] = mapped_column(
         String(150),
@@ -248,8 +401,12 @@ class Asset(Base):
     )
 
     # -----------------------------------------------------
-    # TRACKER AUTHENTICATION
+    # LEGACY TRACKER AUTHENTICATION
     # -----------------------------------------------------
+    #
+    # These stay temporarily so existing GPS tracker
+    # authentication continues working while we move
+    # toward TrackerDevice-based management.
 
     tracker_key_id: Mapped[
         str | None

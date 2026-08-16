@@ -83,6 +83,127 @@ class ProjectResponse(BaseModel):
 
 
 # ---------------------------------------------------------
+# TRACKER DEVICE SCHEMAS
+# ---------------------------------------------------------
+
+
+class TrackerDeviceCreate(BaseModel):
+    device_name: str = Field(
+        min_length=1,
+        max_length=150,
+    )
+
+    serial_number: str = Field(
+        min_length=1,
+        max_length=100,
+    )
+
+    provider: str = Field(
+        default="Manual",
+        min_length=1,
+        max_length=100,
+    )
+
+    provider_device_id: str | None = Field(
+        default=None,
+        max_length=150,
+    )
+
+    imei: str | None = Field(
+        default=None,
+        max_length=50,
+    )
+
+    sim_iccid: str | None = Field(
+        default=None,
+        max_length=50,
+    )
+
+    status: str = Field(
+        default="Active",
+        min_length=1,
+        max_length=50,
+    )
+
+    notes: str = ""
+
+
+class TrackerDeviceUpdate(BaseModel):
+    device_name: str | None = Field(
+        default=None,
+        min_length=1,
+        max_length=150,
+    )
+
+    serial_number: str | None = Field(
+        default=None,
+        min_length=1,
+        max_length=100,
+    )
+
+    provider: str | None = Field(
+        default=None,
+        min_length=1,
+        max_length=100,
+    )
+
+    provider_device_id: str | None = Field(
+        default=None,
+        max_length=150,
+    )
+
+    imei: str | None = Field(
+        default=None,
+        max_length=50,
+    )
+
+    sim_iccid: str | None = Field(
+        default=None,
+        max_length=50,
+    )
+
+    status: str | None = Field(
+        default=None,
+        min_length=1,
+        max_length=50,
+    )
+
+    notes: str | None = None
+
+
+class TrackerDeviceResponse(BaseModel):
+    id: int
+    organization_id: int
+
+    asset_id: int | None
+
+    device_name: str
+    serial_number: str
+
+    provider: str
+    provider_device_id: str | None
+
+    imei: str | None
+    sim_iccid: str | None
+
+    status: str
+
+    last_communication_at: (
+        datetime | None
+    )
+
+    assigned_at: datetime | None
+
+    notes: str
+
+    created_at: datetime
+
+    model_config = ConfigDict(
+        from_attributes=True
+    )
+
+
+# ---------------------------------------------------------
 # ASSET SCHEMAS
 # ---------------------------------------------------------
 
@@ -93,13 +214,8 @@ class AssetBase(BaseModel):
 
     category: str = "Equipment"
 
-    # Legacy project display name.
-    #
-    # This stays temporarily while the frontend moves
-    # to structured project_id relationships.
     project: str = "Unassigned"
 
-    # Structured Project / Jobsite relationship.
     project_id: int | None = None
 
     status: str = "Online"
@@ -195,10 +311,7 @@ class AssetUpdate(BaseModel):
 
     category: str | None = None
 
-    # Legacy project name.
     project: str | None = None
-
-    # Structured Project / Jobsite.
     project_id: int | None = None
 
     status: str | None = None
@@ -288,7 +401,7 @@ class AssetGpsUpdate(BaseModel):
 
 
 # ---------------------------------------------------------
-# TRACKER
+# TRACKER KEY
 # ---------------------------------------------------------
 
 
