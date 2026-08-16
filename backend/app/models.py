@@ -15,6 +15,83 @@ from sqlalchemy.orm import Mapped, mapped_column
 from app.database import Base
 
 
+# ---------------------------------------------------------
+# PROJECT / JOBSITE
+# ---------------------------------------------------------
+
+
+class Project(Base):
+    __tablename__ = "projects"
+
+    __table_args__ = (
+        UniqueConstraint(
+            "organization_id",
+            "name",
+            name="uq_projects_organization_name",
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(
+        Integer,
+        primary_key=True,
+    )
+
+    organization_id: Mapped[int] = mapped_column(
+        ForeignKey(
+            "organizations.id",
+            ondelete="CASCADE",
+        ),
+        nullable=False,
+        index=True,
+    )
+
+    name: Mapped[str] = mapped_column(
+        String(150),
+        nullable=False,
+    )
+
+    code: Mapped[
+        str | None
+    ] = mapped_column(
+        String(50),
+        nullable=True,
+    )
+
+    address: Mapped[
+        str | None
+    ] = mapped_column(
+        String(255),
+        nullable=True,
+    )
+
+    status: Mapped[str] = mapped_column(
+        String(50),
+        nullable=False,
+        default="Active",
+    )
+
+    notes: Mapped[str] = mapped_column(
+        Text,
+        nullable=False,
+        default="",
+    )
+
+    created_at: Mapped[
+        datetime
+    ] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        default=lambda: datetime.now(
+            timezone.utc
+        ),
+    )
+
+
+# ---------------------------------------------------------
+# ASSET
+# ---------------------------------------------------------
+
+
 class Asset(Base):
     __tablename__ = "assets"
 
@@ -22,7 +99,7 @@ class Asset(Base):
         # Legacy user-level uniqueness.
         #
         # We are keeping this temporarily while
-        # transitioning existing assets to organization
+        # transitioning completely to organization
         # ownership.
         UniqueConstraint(
             "owner_id",
@@ -30,10 +107,7 @@ class Asset(Base):
             name="uq_assets_owner_asset_number",
         ),
 
-        # Organization-level uniqueness.
-        #
-        # Once the transition is complete, this becomes
-        # the primary asset-number uniqueness rule.
+        # Organization-level asset number uniqueness.
         UniqueConstraint(
             "organization_id",
             "asset_number",
@@ -50,9 +124,6 @@ class Asset(Base):
     # -----------------------------------------------------
     # LEGACY USER OWNERSHIP
     # -----------------------------------------------------
-    #
-    # We are keeping owner_id for now so existing routes
-    # and assets continue working during the migration.
 
     owner_id: Mapped[int] = mapped_column(
         ForeignKey(
@@ -99,10 +170,32 @@ class Asset(Base):
         default="Equipment",
     )
 
+    # -----------------------------------------------------
+    # LEGACY PROJECT NAME
+    # -----------------------------------------------------
+    #
+    # Keep this temporarily while we migrate existing
+    # project strings into the projects table.
+
     project: Mapped[str] = mapped_column(
         String(150),
         nullable=False,
         default="Unassigned",
+    )
+
+    # -----------------------------------------------------
+    # STRUCTURED PROJECT / JOBSITE
+    # -----------------------------------------------------
+
+    project_id: Mapped[
+        int | None
+    ] = mapped_column(
+        ForeignKey(
+            "projects.id",
+            ondelete="SET NULL",
+        ),
+        nullable=True,
+        index=True,
     )
 
     status: Mapped[str] = mapped_column(
@@ -248,6 +341,11 @@ class Asset(Base):
         )
 
 
+# ---------------------------------------------------------
+# ASSET LOCATION HISTORY
+# ---------------------------------------------------------
+
+
 class AssetLocation(Base):
     __tablename__ = "asset_locations"
 
@@ -304,6 +402,11 @@ class AssetLocation(Base):
             timezone.utc
         ),
     )
+
+
+# ---------------------------------------------------------
+# GEOFENCE EVENT HISTORY
+# ---------------------------------------------------------
 
 
 class GeofenceEvent(Base):
