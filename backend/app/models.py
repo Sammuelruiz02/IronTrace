@@ -19,10 +19,25 @@ class Asset(Base):
     __tablename__ = "assets"
 
     __table_args__ = (
+        # Legacy user-level uniqueness.
+        #
+        # We are keeping this temporarily while
+        # transitioning existing assets to organization
+        # ownership.
         UniqueConstraint(
             "owner_id",
             "asset_number",
             name="uq_assets_owner_asset_number",
+        ),
+
+        # Organization-level uniqueness.
+        #
+        # Once the transition is complete, this becomes
+        # the primary asset-number uniqueness rule.
+        UniqueConstraint(
+            "organization_id",
+            "asset_number",
+            name="uq_assets_organization_asset_number",
         ),
     )
 
@@ -32,6 +47,13 @@ class Asset(Base):
         index=True,
     )
 
+    # -----------------------------------------------------
+    # LEGACY USER OWNERSHIP
+    # -----------------------------------------------------
+    #
+    # We are keeping owner_id for now so existing routes
+    # and assets continue working during the migration.
+
     owner_id: Mapped[int] = mapped_column(
         ForeignKey(
             "users.id",
@@ -40,6 +62,25 @@ class Asset(Base):
         nullable=False,
         index=True,
     )
+
+    # -----------------------------------------------------
+    # ORGANIZATION OWNERSHIP
+    # -----------------------------------------------------
+
+    organization_id: Mapped[
+        int | None
+    ] = mapped_column(
+        ForeignKey(
+            "organizations.id",
+            ondelete="CASCADE",
+        ),
+        nullable=True,
+        index=True,
+    )
+
+    # -----------------------------------------------------
+    # ASSET INFORMATION
+    # -----------------------------------------------------
 
     asset_number: Mapped[str] = mapped_column(
         String(50),
@@ -88,12 +129,20 @@ class Asset(Base):
         default="No GPS assigned",
     )
 
-    latitude: Mapped[float | None] = mapped_column(
+    # -----------------------------------------------------
+    # GPS
+    # -----------------------------------------------------
+
+    latitude: Mapped[
+        float | None
+    ] = mapped_column(
         Float,
         nullable=True,
     )
 
-    longitude: Mapped[float | None] = mapped_column(
+    longitude: Mapped[
+        float | None
+    ] = mapped_column(
         Float,
         nullable=True,
     )
@@ -104,6 +153,10 @@ class Asset(Base):
         DateTime(timezone=True),
         nullable=True,
     )
+
+    # -----------------------------------------------------
+    # TRACKER AUTHENTICATION
+    # -----------------------------------------------------
 
     tracker_key_id: Mapped[
         str | None
@@ -127,6 +180,10 @@ class Asset(Base):
         DateTime(timezone=True),
         nullable=True,
     )
+
+    # -----------------------------------------------------
+    # GEOFENCE
+    # -----------------------------------------------------
 
     geofence_enabled: Mapped[
         bool
@@ -164,13 +221,19 @@ class Asset(Base):
         nullable=True,
     )
 
+    # -----------------------------------------------------
+    # NOTES / METADATA
+    # -----------------------------------------------------
+
     notes: Mapped[str] = mapped_column(
         Text,
         nullable=False,
         default="",
     )
 
-    created_at: Mapped[datetime] = mapped_column(
+    created_at: Mapped[
+        datetime
+    ] = mapped_column(
         DateTime(timezone=True),
         nullable=False,
         default=lambda: datetime.now(
@@ -189,9 +252,9 @@ class AssetLocation(Base):
     __tablename__ = "asset_locations"
 
     id: Mapped[int] = mapped_column(
-    Integer,
-    primary_key=True,
-)
+        Integer,
+        primary_key=True,
+    )
 
     asset_id: Mapped[int] = mapped_column(
         ForeignKey(
@@ -202,17 +265,23 @@ class AssetLocation(Base):
         index=True,
     )
 
-    latitude: Mapped[float] = mapped_column(
+    latitude: Mapped[
+        float
+    ] = mapped_column(
         Float,
         nullable=False,
     )
 
-    longitude: Mapped[float] = mapped_column(
+    longitude: Mapped[
+        float
+    ] = mapped_column(
         Float,
         nullable=False,
     )
 
-    gps_status: Mapped[str] = mapped_column(
+    gps_status: Mapped[
+        str
+    ] = mapped_column(
         String(50),
         nullable=False,
         default="Live",
@@ -255,7 +324,9 @@ class GeofenceEvent(Base):
         index=True,
     )
 
-    event_type: Mapped[str] = mapped_column(
+    event_type: Mapped[
+        str
+    ] = mapped_column(
         String(50),
         nullable=False,
     )

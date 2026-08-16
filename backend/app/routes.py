@@ -98,20 +98,77 @@ def parse_tracker_key(
 
 
 # ---------------------------------------------------------
-# ASSET HELPERS
+# ORGANIZATION / ROLE HELPERS
 # ---------------------------------------------------------
 
 
-def get_owned_asset(
+def require_organization(
+    current_user: User,
+) -> int:
+    if current_user.organization_id is None:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=(
+                "Your account is not assigned "
+                "to an organization."
+            ),
+        )
+
+    return current_user.organization_id
+
+
+def require_role(
+    current_user: User,
+    allowed_roles: set[str],
+) -> None:
+    if current_user.role not in allowed_roles:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=(
+                "You do not have permission "
+                "to perform this action."
+            ),
+        )
+
+
+def require_manager_or_admin(
+    current_user: User,
+) -> None:
+    require_role(
+        current_user,
+        {
+            "admin",
+            "manager",
+        },
+    )
+
+
+def require_admin(
+    current_user: User,
+) -> None:
+    require_role(
+        current_user,
+        {
+            "admin",
+        },
+    )
+
+
+def get_organization_asset(
     asset_id: int,
     database: Session,
     current_user: User,
 ) -> Asset:
+    organization_id = require_organization(
+        current_user
+    )
+
     asset = (
         database.query(Asset)
         .filter(
             Asset.id == asset_id,
-            Asset.owner_id == current_user.id,
+            Asset.organization_id
+            == organization_id,
         )
         .first()
     )
@@ -342,13 +399,11 @@ def evaluate_geofence(
     ):
         return "Unassigned", None
 
-    distance = (
-        calculate_distance_meters(
-            latitude,
-            longitude,
-            asset.geofence_latitude,
-            asset.geofence_longitude,
-        )
+    distance = calculate_distance_meters(
+        latitude,
+        longitude,
+        asset.geofence_latitude,
+        asset.geofence_longitude,
     )
 
     if (
@@ -409,12 +464,10 @@ def process_geofence_transition(
     longitude: float,
     recorded_at: datetime,
 ) -> tuple[str, float | None]:
-    new_state, distance = (
-        evaluate_geofence(
-            asset,
-            latitude,
-            longitude,
-        )
+    new_state, distance = evaluate_geofence(
+        asset,
+        latitude,
+        longitude,
     )
 
     if new_state == "Unassigned":
@@ -429,7 +482,7 @@ def process_geofence_transition(
         asset.geofence_state
     )
 
-    # First reading establishes baseline.
+    # First valid reading establishes baseline.
     if previous_state not in (
         "Inside",
         "Outside",
@@ -443,7 +496,7 @@ def process_geofence_transition(
             distance,
         )
 
-    # No crossing occurred.
+    # No boundary crossing.
     if previous_state == new_state:
         return (
             new_state,
@@ -521,8 +574,8 @@ def update_latest_asset_location(
                 )
             )
 
-        # Old packets remain in history
-        # but cannot change live state.
+        # Old packets stay in location history
+        # but cannot overwrite the live asset state.
         if recorded_at < existing_time:
             return
 
@@ -572,6 +625,10 @@ def update_latest_asset_location(
 
 # ---------------------------------------------------------
 # GET ASSETS
+#
+# admin   = allowed
+# manager = allowed
+# member  = allowed
 # ---------------------------------------------------------
 
 
@@ -589,11 +646,15 @@ def get_assets(
         get_current_user
     ),
 ):
+    organization_id = require_organization(
+        current_user
+    )
+
     return (
         database.query(Asset)
         .filter(
-            Asset.owner_id
-            == current_user.id
+            Asset.organization_id
+            == organization_id
         )
         .order_by(
             Asset.id.desc()
@@ -604,6 +665,10 @@ def get_assets(
 
 # ---------------------------------------------------------
 # CREATE ASSET
+#
+# admin   = allowed
+# manager = allowed
+# member  = denied
 # ---------------------------------------------------------
 
 
@@ -621,6 +686,14 @@ def create_asset(
         get_current_user
     ),
 ):
+    require_manager_or_admin(
+        current_user
+    )
+
+    organization_id = require_organization(
+        current_user
+    )
+
     asset_number = (
         asset_data.asset_number.strip()
     )
@@ -628,8 +701,8 @@ def create_asset(
     existing_asset = (
         database.query(Asset)
         .filter(
-            Asset.owner_id
-            == current_user.id,
+            Asset.organization_id
+            == organization_id,
             Asset.asset_number
             == asset_number,
         )
@@ -651,9 +724,15 @@ def create_asset(
         asset_data.model_dump()
     )
 
+    # Keep the creator for audit/history purposes.
     asset_values[
         "owner_id"
     ] = current_user.id
+
+    # Organization owns and shares the asset.
+    asset_values[
+        "organization_id"
+    ] = organization_id
 
     asset_values[
         "asset_number"
@@ -678,6 +757,8 @@ def create_asset(
 
 # ---------------------------------------------------------
 # GPS TRACKER DEVICE UPDATE
+#
+# Uses tracker key authentication instead of user roles.
 # ---------------------------------------------------------
 
 
@@ -698,10 +779,8 @@ def update_gps_with_tracker_key(
         get_database
     ),
 ):
-    key_id, secret = (
-        parse_tracker_key(
-            x_tracker_key
-        )
+    key_id, secret = parse_tracker_key(
+        x_tracker_key
     )
 
     asset = (
@@ -726,10 +805,8 @@ def update_gps_with_tracker_key(
             ),
         )
 
-    submitted_hash = (
-        hash_tracker_secret(
-            secret
-        )
+    submitted_hash = hash_tracker_secret(
+        secret
     )
 
     key_is_valid = (
@@ -799,6 +876,10 @@ def update_gps_with_tracker_key(
 
 # ---------------------------------------------------------
 # LOCATION HISTORY
+#
+# admin   = allowed
+# manager = allowed
+# member  = allowed
 # ---------------------------------------------------------
 
 
@@ -817,7 +898,7 @@ def get_asset_locations(
         get_current_user
     ),
 ):
-    asset = get_owned_asset(
+    asset = get_organization_asset(
         asset_id,
         database,
         current_user,
@@ -841,6 +922,10 @@ def get_asset_locations(
 
 # ---------------------------------------------------------
 # GEOFENCE EVENT HISTORY
+#
+# admin   = allowed
+# manager = allowed
+# member  = allowed
 # ---------------------------------------------------------
 
 
@@ -859,7 +944,7 @@ def get_geofence_events(
         get_current_user
     ),
 ):
-    asset = get_owned_asset(
+    asset = get_organization_asset(
         asset_id,
         database,
         current_user,
@@ -890,6 +975,10 @@ def get_geofence_events(
 
 # ---------------------------------------------------------
 # ACKNOWLEDGE GEOFENCE BREACH
+#
+# admin   = allowed
+# manager = allowed
+# member  = denied
 # ---------------------------------------------------------
 
 
@@ -907,7 +996,11 @@ def acknowledge_geofence_event(
         get_current_user
     ),
 ):
-    asset = get_owned_asset(
+    require_manager_or_admin(
+        current_user
+    )
+
+    asset = get_organization_asset(
         asset_id,
         database,
         current_user,
@@ -948,8 +1041,8 @@ def acknowledge_geofence_event(
             ),
         )
 
-    # If already acknowledged, keep the
-    # original reviewer and timestamp.
+    # Keep the original reviewer/timestamp
+    # if already acknowledged.
     if event.acknowledged:
         return (
             add_acknowledgement_user_details(
@@ -983,6 +1076,12 @@ def acknowledge_geofence_event(
 
 # ---------------------------------------------------------
 # UPDATE ASSET
+#
+# Includes asset fields and geofence configuration.
+#
+# admin   = allowed
+# manager = allowed
+# member  = denied
 # ---------------------------------------------------------
 
 
@@ -1000,7 +1099,11 @@ def update_asset(
         get_current_user
     ),
 ):
-    asset = get_owned_asset(
+    require_manager_or_admin(
+        current_user
+    )
+
+    asset = get_organization_asset(
         asset_id,
         database,
         current_user,
@@ -1027,8 +1130,8 @@ def update_asset(
         duplicate_asset = (
             database.query(Asset)
             .filter(
-                Asset.owner_id
-                == current_user.id,
+                Asset.organization_id
+                == asset.organization_id,
                 Asset.asset_number
                 == new_asset_number,
                 Asset.id
@@ -1128,10 +1231,7 @@ def update_asset(
                 ),
             )
 
-        if (
-            new_geofence_radius
-            <= 0
-        ):
+        if new_geofence_radius <= 0:
             raise HTTPException(
                 status_code=(
                     status.HTTP_422_UNPROCESSABLE_ENTITY
@@ -1142,17 +1242,15 @@ def update_asset(
                 ),
             )
 
-    for field, value in (
-        updates.items()
-    ):
+    for field, value in updates.items():
         setattr(
             asset,
             field,
             value,
         )
 
-    # Changing the boundary should not
-    # create a false Entered/Exited event.
+    # Changing the boundary should not create
+    # a false Entered/Exited event.
     if geofence_changed:
         asset.geofence_state = None
 
@@ -1190,6 +1288,12 @@ def update_asset(
 
 # ---------------------------------------------------------
 # USER-AUTHENTICATED GPS UPDATE
+#
+# This is useful for testing/manual GPS updates.
+#
+# admin   = allowed
+# manager = allowed
+# member  = denied
 # ---------------------------------------------------------
 
 
@@ -1207,7 +1311,11 @@ def update_asset_gps(
         get_current_user
     ),
 ):
-    asset = get_owned_asset(
+    require_manager_or_admin(
+        current_user
+    )
+
+    asset = get_organization_asset(
         asset_id,
         database,
         current_user,
@@ -1250,6 +1358,10 @@ def update_asset_gps(
 
 # ---------------------------------------------------------
 # GENERATE / REPLACE TRACKER KEY
+#
+# admin   = allowed
+# manager = allowed
+# member  = denied
 # ---------------------------------------------------------
 
 
@@ -1267,7 +1379,11 @@ def generate_tracker_key(
         get_current_user
     ),
 ):
-    asset = get_owned_asset(
+    require_manager_or_admin(
+        current_user
+    )
+
+    asset = get_organization_asset(
         asset_id,
         database,
         current_user,
@@ -1316,6 +1432,10 @@ def generate_tracker_key(
 
 # ---------------------------------------------------------
 # DISABLE TRACKER
+#
+# admin   = allowed
+# manager = allowed
+# member  = denied
 # ---------------------------------------------------------
 
 
@@ -1334,7 +1454,11 @@ def disable_tracker_key(
         get_current_user
     ),
 ):
-    asset = get_owned_asset(
+    require_manager_or_admin(
+        current_user
+    )
+
+    asset = get_organization_asset(
         asset_id,
         database,
         current_user,
@@ -1355,9 +1479,7 @@ def disable_tracker_key(
     asset.tracker_key_id = None
     asset.tracker_key_hash = None
 
-    asset.tracker_key_created_at = (
-        None
-    )
+    asset.tracker_key_created_at = None
 
     asset.gps_status = (
         "Unassigned"
@@ -1372,6 +1494,10 @@ def disable_tracker_key(
 
 # ---------------------------------------------------------
 # DELETE ASSET
+#
+# admin   = allowed
+# manager = denied
+# member  = denied
 # ---------------------------------------------------------
 
 
@@ -1390,7 +1516,11 @@ def delete_asset(
         get_current_user
     ),
 ):
-    asset = get_owned_asset(
+    require_admin(
+        current_user
+    )
+
+    asset = get_organization_asset(
         asset_id,
         database,
         current_user,
