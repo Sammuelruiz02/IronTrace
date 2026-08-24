@@ -537,6 +537,46 @@ class GeofenceEventResponse(BaseModel):
 
 
 # ---------------------------------------------------------
+# NOTIFICATIONS / ALERTS
+# ---------------------------------------------------------
+
+
+class NotificationResponse(BaseModel):
+    id: int
+    organization_id: int
+
+    asset_id: int | None
+    device_id: int | None
+    geofence_event_id: int | None
+
+    notification_type: str
+    severity: str
+
+    title: str
+    message: str
+
+    is_read: bool
+    read_at: datetime | None
+    read_by_user_id: int | None
+
+    is_resolved: bool
+    resolved_at: datetime | None
+    resolved_by_user_id: int | None
+
+    created_at: datetime
+
+    model_config = ConfigDict(
+        from_attributes=True
+    )
+
+
+class NotificationUnreadCountResponse(
+    BaseModel
+):
+    unread_count: int
+
+
+# ---------------------------------------------------------
 # ASSET RESPONSE
 # ---------------------------------------------------------
 

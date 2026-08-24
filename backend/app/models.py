@@ -96,16 +96,12 @@ class TrackerDevice(Base):
     __tablename__ = "tracker_devices"
 
     __table_args__ = (
-        # A company cannot register the same serial
-        # number more than once.
         UniqueConstraint(
             "organization_id",
             "serial_number",
             name="uq_tracker_devices_organization_serial",
         ),
 
-        # Provider device IDs only need to be unique
-        # within the same provider.
         UniqueConstraint(
             "provider",
             "provider_device_id",
@@ -118,10 +114,6 @@ class TrackerDevice(Base):
         primary_key=True,
     )
 
-    # -----------------------------------------------------
-    # ORGANIZATION
-    # -----------------------------------------------------
-
     organization_id: Mapped[int] = mapped_column(
         ForeignKey(
             "organizations.id",
@@ -130,16 +122,6 @@ class TrackerDevice(Base):
         nullable=False,
         index=True,
     )
-
-    # -----------------------------------------------------
-    # ASSET ASSIGNMENT
-    # -----------------------------------------------------
-    #
-    # A tracker can be stored in inventory without being
-    # assigned to an asset.
-    #
-    # unique=True means one asset can only have one
-    # TrackerDevice assigned through this table.
 
     asset_id: Mapped[
         int | None
@@ -152,10 +134,6 @@ class TrackerDevice(Base):
         unique=True,
         index=True,
     )
-
-    # -----------------------------------------------------
-    # DEVICE IDENTITY
-    # -----------------------------------------------------
 
     device_name: Mapped[str] = mapped_column(
         String(150),
@@ -180,10 +158,6 @@ class TrackerDevice(Base):
         nullable=True,
     )
 
-    # -----------------------------------------------------
-    # CELLULAR / HARDWARE INFORMATION
-    # -----------------------------------------------------
-
     imei: Mapped[
         str | None
     ] = mapped_column(
@@ -201,10 +175,6 @@ class TrackerDevice(Base):
         unique=True,
         index=True,
     )
-
-    # -----------------------------------------------------
-    # DEVICE STATUS
-    # -----------------------------------------------------
 
     status: Mapped[str] = mapped_column(
         String(50),
@@ -253,17 +223,12 @@ class Asset(Base):
     __tablename__ = "assets"
 
     __table_args__ = (
-        # Legacy user-level uniqueness.
-        #
-        # Kept temporarily during the organization
-        # ownership transition.
         UniqueConstraint(
             "owner_id",
             "asset_number",
             name="uq_assets_owner_asset_number",
         ),
 
-        # Organization-level asset number uniqueness.
         UniqueConstraint(
             "organization_id",
             "asset_number",
@@ -277,10 +242,6 @@ class Asset(Base):
         index=True,
     )
 
-    # -----------------------------------------------------
-    # LEGACY USER OWNERSHIP
-    # -----------------------------------------------------
-
     owner_id: Mapped[int] = mapped_column(
         ForeignKey(
             "users.id",
@@ -289,10 +250,6 @@ class Asset(Base):
         nullable=False,
         index=True,
     )
-
-    # -----------------------------------------------------
-    # ORGANIZATION OWNERSHIP
-    # -----------------------------------------------------
 
     organization_id: Mapped[
         int | None
@@ -304,10 +261,6 @@ class Asset(Base):
         nullable=True,
         index=True,
     )
-
-    # -----------------------------------------------------
-    # ASSET INFORMATION
-    # -----------------------------------------------------
 
     asset_number: Mapped[str] = mapped_column(
         String(50),
@@ -326,19 +279,12 @@ class Asset(Base):
         default="Equipment",
     )
 
-    # -----------------------------------------------------
-    # LEGACY PROJECT NAME
-    # -----------------------------------------------------
-
+    # Legacy project name.
     project: Mapped[str] = mapped_column(
         String(150),
         nullable=False,
         default="Unassigned",
     )
-
-    # -----------------------------------------------------
-    # STRUCTURED PROJECT / JOBSITE
-    # -----------------------------------------------------
 
     project_id: Mapped[
         int | None
@@ -375,10 +321,6 @@ class Asset(Base):
         default="No GPS assigned",
     )
 
-    # -----------------------------------------------------
-    # GPS
-    # -----------------------------------------------------
-
     latitude: Mapped[
         float | None
     ] = mapped_column(
@@ -403,10 +345,6 @@ class Asset(Base):
     # -----------------------------------------------------
     # LEGACY TRACKER AUTHENTICATION
     # -----------------------------------------------------
-    #
-    # These stay temporarily so existing GPS tracker
-    # authentication continues working while we move
-    # toward TrackerDevice-based management.
 
     tracker_key_id: Mapped[
         str | None
@@ -470,10 +408,6 @@ class Asset(Base):
         String(50),
         nullable=True,
     )
-
-    # -----------------------------------------------------
-    # NOTES / METADATA
-    # -----------------------------------------------------
 
     notes: Mapped[str] = mapped_column(
         Text,
@@ -668,4 +602,173 @@ class GeofenceEvent(Base):
         default=lambda: datetime.now(
             timezone.utc
         ),
+    )
+
+
+# ---------------------------------------------------------
+# NOTIFICATIONS / ALERTS
+# ---------------------------------------------------------
+
+
+class Notification(Base):
+    __tablename__ = "notifications"
+
+    id: Mapped[int] = mapped_column(
+        Integer,
+        primary_key=True,
+    )
+
+    # -----------------------------------------------------
+    # ORGANIZATION
+    # -----------------------------------------------------
+
+    organization_id: Mapped[int] = mapped_column(
+        ForeignKey(
+            "organizations.id",
+            ondelete="CASCADE",
+        ),
+        nullable=False,
+        index=True,
+    )
+
+    # -----------------------------------------------------
+    # OPTIONAL SOURCE REFERENCES
+    # -----------------------------------------------------
+    #
+    # A notification may come from:
+    #
+    # - an asset
+    # - a tracker device
+    # - a geofence event
+    #
+    # SET NULL preserves the notification history if the
+    # referenced record is later deleted.
+
+    asset_id: Mapped[
+        int | None
+    ] = mapped_column(
+        ForeignKey(
+            "assets.id",
+            ondelete="SET NULL",
+        ),
+        nullable=True,
+        index=True,
+    )
+
+    device_id: Mapped[
+        int | None
+    ] = mapped_column(
+        ForeignKey(
+            "tracker_devices.id",
+            ondelete="SET NULL",
+        ),
+        nullable=True,
+        index=True,
+    )
+
+    geofence_event_id: Mapped[
+        int | None
+    ] = mapped_column(
+        ForeignKey(
+            "geofence_events.id",
+            ondelete="SET NULL",
+        ),
+        nullable=True,
+        index=True,
+    )
+
+    # -----------------------------------------------------
+    # NOTIFICATION DETAILS
+    # -----------------------------------------------------
+
+    notification_type: Mapped[str] = mapped_column(
+        String(50),
+        nullable=False,
+        index=True,
+    )
+
+    severity: Mapped[str] = mapped_column(
+        String(50),
+        nullable=False,
+        default="Info",
+        index=True,
+    )
+
+    title: Mapped[str] = mapped_column(
+        String(200),
+        nullable=False,
+    )
+
+    message: Mapped[str] = mapped_column(
+        Text,
+        nullable=False,
+    )
+
+    # -----------------------------------------------------
+    # READ / RESOLUTION STATE
+    # -----------------------------------------------------
+
+    is_read: Mapped[bool] = mapped_column(
+        Boolean,
+        nullable=False,
+        default=False,
+        index=True,
+    )
+
+    read_at: Mapped[
+        datetime | None
+    ] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
+
+    read_by_user_id: Mapped[
+        int | None
+    ] = mapped_column(
+        ForeignKey(
+            "users.id",
+            ondelete="SET NULL",
+        ),
+        nullable=True,
+        index=True,
+    )
+
+    is_resolved: Mapped[bool] = mapped_column(
+        Boolean,
+        nullable=False,
+        default=False,
+        index=True,
+    )
+
+    resolved_at: Mapped[
+        datetime | None
+    ] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
+
+    resolved_by_user_id: Mapped[
+        int | None
+    ] = mapped_column(
+        ForeignKey(
+            "users.id",
+            ondelete="SET NULL",
+        ),
+        nullable=True,
+        index=True,
+    )
+
+    # -----------------------------------------------------
+    # TIMESTAMPS
+    # -----------------------------------------------------
+
+    created_at: Mapped[
+        datetime
+    ] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        default=lambda: datetime.now(
+            timezone.utc
+        ),
+        index=True,
     )

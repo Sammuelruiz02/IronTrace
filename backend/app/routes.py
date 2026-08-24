@@ -19,6 +19,7 @@ from app.models import (
     Asset,
     AssetLocation,
     GeofenceEvent,
+    Notification,
 )
 from app.schemas import (
     AssetCreate,
@@ -416,7 +417,7 @@ def evaluate_geofence(
 
 
 # ---------------------------------------------------------
-# GEOFENCE EVENTS
+# GEOFENCE EVENTS + NOTIFICATIONS
 # ---------------------------------------------------------
 
 
@@ -455,6 +456,53 @@ def save_geofence_event(
     )
 
     database.add(event)
+
+    # Assign the geofence event an ID without
+    # committing the surrounding GPS transaction.
+    database.flush()
+
+    # Only an actual exit creates a breach alert.
+    # Entered events remain part of event history
+    # but do not create critical notifications.
+    if (
+        event_type == "Exited"
+        and asset.organization_id
+        is not None
+    ):
+        notification = Notification(
+            organization_id=(
+                asset.organization_id
+            ),
+            asset_id=asset.id,
+            device_id=None,
+            geofence_event_id=event.id,
+            notification_type=(
+                "GeofenceBreach"
+            ),
+            severity="Critical",
+            title=(
+                f"Geofence breach: "
+                f"{asset.asset_name}"
+            ),
+            message=(
+                f"Asset {asset.asset_number} "
+                f"({asset.asset_name}) exited "
+                f"its geofence and is "
+                f"{distance_meters:.0f} meters "
+                f"from the geofence center."
+            ),
+            is_read=False,
+            read_at=None,
+            read_by_user_id=None,
+            is_resolved=False,
+            resolved_at=None,
+            resolved_by_user_id=None,
+            created_at=datetime.now(
+                timezone.utc
+            ),
+        )
+
+        database.add(notification)
 
 
 def process_geofence_transition(
