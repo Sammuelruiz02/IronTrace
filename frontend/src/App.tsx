@@ -16,6 +16,7 @@ import LiveMap from "./pages/LiveMap";
 import Login from "./pages/Login";
 import Projects from "./pages/Projects";
 import Register from "./pages/Register";
+import Settings from "./pages/Settings";
 
 
 function App() {
@@ -42,46 +43,33 @@ function App() {
 
           <Route
             path="/"
-            element={
-              <Dashboard />
-            }
+            element={<Dashboard />}
           />
 
           <Route
             path="/assets"
-            element={
-              <Assets />
-            }
+            element={<Assets />}
           />
 
           <Route
             path="/devices"
-            element={
-              <Devices />
-            }
+            element={<Devices />}
           />
 
           <Route
             path="/projects"
-            element={
-              <Projects />
-            }
+            element={<Projects />}
           />
 
           <Route
             path="/map"
-            element={
-              <LiveMap />
-            }
+            element={<LiveMap />}
           />
 
           <Route
             path="/alerts"
-            element={
-              <Alerts />
-            }
+            element={<Alerts />}
           />
-
 
           <Route
             path="/maintenance"
@@ -105,12 +93,7 @@ function App() {
 
           <Route
             path="/settings"
-            element={
-              <ComingSoon
-                title="Settings"
-                description="Manage company preferences, users, roles, notifications, and GPS integrations."
-              />
-            }
+            element={<Settings />}
           />
 
         </Route>
