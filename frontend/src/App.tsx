@@ -11,6 +11,7 @@ import Alerts from "./pages/Alerts";
 import Assets from "./pages/Assets";
 import ComingSoon from "./pages/ComingSoon";
 import Dashboard from "./pages/Dashboard";
+import Devices from "./pages/Devices";
 import LiveMap from "./pages/LiveMap";
 import Login from "./pages/Login";
 import Projects from "./pages/Projects";
@@ -50,6 +51,13 @@ function App() {
             path="/assets"
             element={
               <Assets />
+            }
+          />
+
+          <Route
+            path="/devices"
+            element={
+              <Devices />
             }
           />
 
