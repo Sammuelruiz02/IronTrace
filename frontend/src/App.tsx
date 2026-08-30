@@ -12,6 +12,7 @@ import Assets from "./pages/Assets";
 import ComingSoon from "./pages/ComingSoon";
 import Dashboard from "./pages/Dashboard";
 import Login from "./pages/Login";
+import Projects from "./pages/Projects";
 import Register from "./pages/Register";
 
 
@@ -43,12 +44,7 @@ function App() {
 
           <Route
             path="/projects"
-            element={
-              <ComingSoon
-                title="Projects"
-                description="Create jobsites, assign equipment, and review project-level asset activity."
-              />
-            }
+            element={<Projects />}
           />
 
           <Route
