@@ -11,6 +11,7 @@ import Alerts from "./pages/Alerts";
 import Assets from "./pages/Assets";
 import ComingSoon from "./pages/ComingSoon";
 import Dashboard from "./pages/Dashboard";
+import LiveMap from "./pages/LiveMap";
 import Login from "./pages/Login";
 import Projects from "./pages/Projects";
 import Register from "./pages/Register";
@@ -20,6 +21,7 @@ function App() {
   return (
     <BrowserRouter>
       <Routes>
+
         <Route
           path="/login"
           element={<Login />}
@@ -30,37 +32,48 @@ function App() {
           element={<Register />}
         />
 
-        <Route element={<ProtectedRoute />}>
+
+        <Route
+          element={
+            <ProtectedRoute />
+          }
+        >
 
           <Route
             path="/"
-            element={<Dashboard />}
+            element={
+              <Dashboard />
+            }
           />
 
           <Route
             path="/assets"
-            element={<Assets />}
+            element={
+              <Assets />
+            }
           />
 
           <Route
             path="/projects"
-            element={<Projects />}
+            element={
+              <Projects />
+            }
           />
 
           <Route
             path="/map"
             element={
-              <ComingSoon
-                title="Live Map"
-                description="Display real-time GPS positions, geofences, movement history, and asset health."
-              />
+              <LiveMap />
             }
           />
 
           <Route
             path="/alerts"
-            element={<Alerts />}
+            element={
+              <Alerts />
+            }
           />
+
 
           <Route
             path="/maintenance"
@@ -94,6 +107,7 @@ function App() {
 
         </Route>
 
+
         <Route
           path="*"
           element={
@@ -103,6 +117,7 @@ function App() {
             />
           }
         />
+
       </Routes>
     </BrowserRouter>
   );
