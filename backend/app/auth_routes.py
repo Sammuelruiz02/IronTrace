@@ -19,6 +19,7 @@ from app.auth import (
     verify_password,
 )
 from app.auth_schemas import (
+    TeamMemberCreate,
     TeamRoleUpdate,
     TokenResponse,
     UserLogin,
@@ -346,6 +347,127 @@ def get_authenticated_user(
     ),
 ):
     return current_user
+
+
+# ---------------------------------------------------------
+# CREATE TEAM MEMBER
+#
+# admin only
+# ---------------------------------------------------------
+
+
+@router.post(
+    "/team",
+    response_model=UserResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+def create_team_member(
+    member_data: TeamMemberCreate,
+    database: Session = Depends(
+        get_database
+    ),
+    current_user: User = Depends(
+        get_current_user
+    ),
+):
+    require_admin(
+        current_user
+    )
+
+    organization_id = (
+        require_organization(
+            current_user
+        )
+    )
+
+    normalized_email = (
+        member_data.email
+        .strip()
+        .lower()
+    )
+
+    full_name = (
+        member_data.full_name
+        .strip()
+    )
+
+    # -----------------------------------------------------
+    # Email addresses are globally unique.
+    # -----------------------------------------------------
+
+    existing_user = (
+        database.query(User)
+        .filter(
+            User.email
+            == normalized_email
+        )
+        .first()
+    )
+
+    if existing_user:
+        raise HTTPException(
+            status_code=(
+                status.HTTP_409_CONFLICT
+            ),
+            detail=(
+                "An account with this email "
+                "already exists."
+            ),
+        )
+
+    # -----------------------------------------------------
+    # Resolve company name from the authenticated admin's
+    # organization. The client cannot choose an arbitrary
+    # organization_id.
+    # -----------------------------------------------------
+
+    organization = (
+        database.query(
+            Organization
+        )
+        .filter(
+            Organization.id
+            == organization_id
+        )
+        .first()
+    )
+
+    if not organization:
+        raise HTTPException(
+            status_code=(
+                status.HTTP_404_NOT_FOUND
+            ),
+            detail=(
+                "Organization not found."
+            ),
+        )
+
+    user = User(
+        email=normalized_email,
+        full_name=full_name,
+        company_name=(
+            organization.name
+        ),
+        organization_id=(
+            organization_id
+        ),
+        role=member_data.role,
+        hashed_password=(
+            hash_password(
+                member_data.password
+            )
+        ),
+        is_active=True,
+    )
+
+    database.add(user)
+
+    database.commit()
+
+    database.refresh(user)
+
+    return user
+
 
 
 # ---------------------------------------------------------

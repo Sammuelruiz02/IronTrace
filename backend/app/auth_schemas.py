@@ -53,6 +53,26 @@ class UserResponse(BaseModel):
     )
 
 
+class TeamMemberCreate(BaseModel):
+    email: EmailStr
+
+    full_name: str = Field(
+        min_length=2,
+        max_length=150,
+    )
+
+    password: str = Field(
+        min_length=8,
+        max_length=128,
+    )
+
+    role: Literal[
+        "admin",
+        "manager",
+        "member",
+    ] = "member"
+
+
 class TeamRoleUpdate(BaseModel):
     role: Literal[
         "admin",

@@ -7,6 +7,7 @@ import {
   } from "../auth";
   
   import type {
+    CreateTeamMemberPayload,
     TeamMember,
   } from "../types/team";
   
@@ -54,6 +55,38 @@ import {
         await getErrorMessage(
           response,
           "Unable to load organization team."
+        )
+      );
+    }
+  
+    return response.json();
+  }
+  
+  
+  export async function createTeamMember(
+    payload: CreateTeamMemberPayload
+  ): Promise<TeamMember> {
+    const response = await fetch(
+      `${API_BASE_URL}/auth/team`,
+      {
+        method: "POST",
+  
+        headers: {
+          "Content-Type":
+            "application/json",
+  
+          ...getAuthorizationHeaders(),
+        },
+  
+        body: JSON.stringify(payload),
+      }
+    );
+  
+    if (!response.ok) {
+      throw new Error(
+        await getErrorMessage(
+          response,
+          "Unable to add team member."
         )
       );
     }

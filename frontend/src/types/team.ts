@@ -14,6 +14,14 @@ import type {
   };
   
   
+  export type CreateTeamMemberPayload = {
+    email: string;
+    full_name: string;
+    password: string;
+    role: UserRole;
+  };
+  
+  
   export type RoleUpdatePayload = {
     role: UserRole;
   };

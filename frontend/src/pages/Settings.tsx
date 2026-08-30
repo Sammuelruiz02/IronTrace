@@ -4,10 +4,12 @@ import {
     Crown,
     Loader2,
     LockKeyhole,
+    Plus,
     Settings as SettingsIcon,
     ShieldCheck,
     UserCog,
     Users,
+    X,
   } from "lucide-react";
   
   import {
@@ -26,6 +28,7 @@ import {
   } from "../auth";
   
   import {
+    createTeamMember,
     getTeam,
     updateTeamMemberRole,
   } from "../api/team";
@@ -34,8 +37,18 @@ import {
   import TopBar from "../components/TopBar";
   
   import type {
+    CreateTeamMemberPayload,
     TeamMember,
   } from "../types/team";
+  
+  
+  const emptyMemberForm:
+    CreateTeamMemberPayload = {
+      email: "",
+      full_name: "",
+      password: "",
+      role: "member",
+    };
   
   
   function Settings() {
@@ -73,6 +86,32 @@ import {
       useState<number | null>(
         null
       );
+  
+    const [
+      addMemberOpen,
+      setAddMemberOpen,
+    ] =
+      useState(false);
+  
+    const [
+      memberForm,
+      setMemberForm,
+    ] =
+      useState<CreateTeamMemberPayload>(
+        emptyMemberForm
+      );
+  
+    const [
+      memberFormError,
+      setMemberFormError,
+    ] =
+      useState("");
+  
+    const [
+      creatingMember,
+      setCreatingMember,
+    ] =
+      useState(false);
   
   
     const isAdmin =
@@ -189,6 +228,97 @@ import {
       };
   
   
+    const openAddMember = () => {
+      setMemberForm({
+        ...emptyMemberForm,
+      });
+  
+      setMemberFormError("");
+      setAddMemberOpen(true);
+    };
+  
+  
+    const handleCreateMember =
+      async () => {
+        if (
+          !memberForm.full_name.trim()
+        ) {
+          setMemberFormError(
+            "Full name is required."
+          );
+  
+          return;
+        }
+  
+        if (
+          !memberForm.email.trim()
+        ) {
+          setMemberFormError(
+            "Email is required."
+          );
+  
+          return;
+        }
+  
+        if (
+          memberForm.password.length <
+          8
+        ) {
+          setMemberFormError(
+            "Password must be at least 8 characters."
+          );
+  
+          return;
+        }
+  
+        try {
+          setCreatingMember(true);
+          setMemberFormError("");
+          setSuccessMessage("");
+  
+          const created =
+            await createTeamMember({
+              email:
+                memberForm.email.trim(),
+  
+              full_name:
+                memberForm.full_name.trim(),
+  
+              password:
+                memberForm.password,
+  
+              role:
+                memberForm.role,
+            });
+  
+          setTeam((current) =>
+            [...current, created].sort(
+              (a, b) =>
+                a.full_name.localeCompare(
+                  b.full_name
+                )
+            )
+          );
+  
+          setAddMemberOpen(false);
+  
+          setSuccessMessage(
+            `${created.full_name} was added to the organization as ${formatRole(
+              created.role
+            )}.`
+          );
+        } catch (error) {
+          setMemberFormError(
+            error instanceof Error
+              ? error.message
+              : "Unable to add team member."
+          );
+        } finally {
+          setCreatingMember(false);
+        }
+      };
+  
+  
     if (!user) {
       return null;
     }
@@ -203,8 +333,6 @@ import {
   
           <main className="p-5 sm:p-7 lg:p-8">
             <div className="mx-auto max-w-[1500px]">
-  
-              {/* HEADER */}
   
               <div className="mb-6">
                 <p className="text-sm font-bold uppercase tracking-widest text-blue-700">
@@ -238,8 +366,6 @@ import {
                 </div>
               )}
   
-  
-              {/* ACCOUNT */}
   
               <section className="grid gap-5 xl:grid-cols-[1.1fr_1fr]">
   
@@ -305,8 +431,6 @@ import {
                 </div>
   
   
-                {/* CURRENT ROLE */}
-  
                 <div className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
   
                   <div className="flex items-center gap-3">
@@ -359,8 +483,6 @@ import {
                 </div>
               </section>
   
-  
-              {/* PERMISSION MATRIX */}
   
               <section className="mt-6">
                 <div className="mb-4">
@@ -444,8 +566,6 @@ import {
               </section>
   
   
-              {/* TEAM MANAGEMENT */}
-  
               <section className="mt-7 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
   
                 <div className="flex flex-col gap-3 border-b border-slate-200 px-5 py-5 sm:flex-row sm:items-center sm:justify-between">
@@ -470,33 +590,45 @@ import {
                   </div>
   
   
-                  {isAdmin &&
-                    !loading && (
-                      <div className="flex flex-wrap gap-2 text-xs font-bold">
+                  {isAdmin && (
+                    <div className="flex flex-wrap items-center gap-2">
   
-                        <span className="rounded-full bg-purple-50 px-3 py-1.5 text-purple-700">
-                          {
-                            roleCounts.admin
-                          }{" "}
-                          Admin
-                        </span>
+                      {!loading && (
+                        <>
+                          <span className="rounded-full bg-purple-50 px-3 py-1.5 text-xs font-bold text-purple-700">
+                            {
+                              roleCounts.admin
+                            }{" "}
+                            Admin
+                          </span>
   
-                        <span className="rounded-full bg-blue-50 px-3 py-1.5 text-blue-700">
-                          {
-                            roleCounts.manager
-                          }{" "}
-                          Manager
-                        </span>
+                          <span className="rounded-full bg-blue-50 px-3 py-1.5 text-xs font-bold text-blue-700">
+                            {
+                              roleCounts.manager
+                            }{" "}
+                            Manager
+                          </span>
   
-                        <span className="rounded-full bg-slate-100 px-3 py-1.5 text-slate-600">
-                          {
-                            roleCounts.member
-                          }{" "}
-                          Member
-                        </span>
+                          <span className="rounded-full bg-slate-100 px-3 py-1.5 text-xs font-bold text-slate-600">
+                            {
+                              roleCounts.member
+                            }{" "}
+                            Member
+                          </span>
+                        </>
+                      )}
   
-                      </div>
-                    )}
+                      <button
+                        type="button"
+                        onClick={openAddMember}
+                        className="ml-1 inline-flex h-10 items-center gap-2 rounded-lg bg-orange-600 px-4 text-xs font-bold text-white transition hover:bg-orange-700"
+                      >
+                        <Plus size={15} />
+  
+                        Add member
+                      </button>
+                    </div>
+                  )}
                 </div>
   
   
@@ -637,6 +769,182 @@ import {
             </div>
           </main>
         </div>
+  
+  
+        {addMemberOpen && (
+          <div className="fixed inset-0 z-[90] flex items-center justify-center bg-slate-950/60 p-4 backdrop-blur-sm">
+  
+            <div className="w-full max-w-lg rounded-2xl bg-white shadow-2xl">
+  
+              <div className="flex items-center justify-between border-b border-slate-200 px-6 py-5">
+  
+                <div>
+                  <p className="text-xs font-bold uppercase tracking-widest text-blue-700">
+                    Organization access
+                  </p>
+  
+                  <h2 className="mt-1 text-xl font-bold text-slate-950">
+                    Add team member
+                  </h2>
+                </div>
+  
+                <button
+                  type="button"
+                  onClick={() =>
+                    setAddMemberOpen(
+                      false
+                    )
+                  }
+                  className="flex h-9 w-9 items-center justify-center rounded-lg text-slate-400 hover:bg-slate-100"
+                >
+                  <X size={19} />
+                </button>
+  
+              </div>
+  
+  
+              <div className="space-y-5 p-6">
+  
+                {memberFormError && (
+                  <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-700">
+                    {memberFormError}
+                  </div>
+                )}
+  
+  
+                <FormField
+                  label="Full name *"
+                  value={
+                    memberForm.full_name
+                  }
+                  placeholder="John Smith"
+                  onChange={(value) =>
+                    setMemberForm({
+                      ...memberForm,
+                      full_name:
+                        value,
+                    })
+                  }
+                />
+  
+  
+                <FormField
+                  label="Email *"
+                  value={
+                    memberForm.email
+                  }
+                  placeholder="john@company.com"
+                  type="email"
+                  onChange={(value) =>
+                    setMemberForm({
+                      ...memberForm,
+                      email:
+                        value,
+                    })
+                  }
+                />
+  
+  
+                <FormField
+                  label="Temporary password *"
+                  value={
+                    memberForm.password
+                  }
+                  placeholder="Minimum 8 characters"
+                  type="password"
+                  onChange={(value) =>
+                    setMemberForm({
+                      ...memberForm,
+                      password:
+                        value,
+                    })
+                  }
+                />
+  
+  
+                <div>
+                  <label className="text-sm font-bold text-slate-700">
+                    Role
+                  </label>
+  
+                  <select
+                    value={
+                      memberForm.role
+                    }
+                    onChange={(event) =>
+                      setMemberForm({
+                        ...memberForm,
+                        role:
+                          event.target
+                            .value as UserRole,
+                      })
+                    }
+                    className="mt-2 h-11 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm font-semibold text-slate-700 outline-none focus:border-blue-600"
+                  >
+                    <option value="member">
+                      Member
+                    </option>
+  
+                    <option value="manager">
+                      Manager
+                    </option>
+  
+                    <option value="admin">
+                      Admin
+                    </option>
+                  </select>
+  
+                  <p className="mt-2 text-xs leading-5 text-slate-500">
+                    You can change this role
+                    later from the team table.
+                  </p>
+                </div>
+  
+              </div>
+  
+  
+              <div className="flex justify-end gap-3 border-t border-slate-200 bg-slate-50 px-6 py-4">
+  
+                <button
+                  type="button"
+                  disabled={
+                    creatingMember
+                  }
+                  onClick={() =>
+                    setAddMemberOpen(
+                      false
+                    )
+                  }
+                  className="rounded-lg border border-slate-300 bg-white px-4 py-2.5 text-sm font-bold text-slate-700"
+                >
+                  Cancel
+                </button>
+  
+  
+                <button
+                  type="button"
+                  disabled={
+                    creatingMember
+                  }
+                  onClick={() =>
+                    void handleCreateMember()
+                  }
+                  className="inline-flex items-center gap-2 rounded-lg bg-orange-600 px-5 py-2.5 text-sm font-bold text-white hover:bg-orange-700 disabled:opacity-50"
+                >
+                  {creatingMember && (
+                    <Loader2
+                      size={16}
+                      className="animate-spin"
+                    />
+                  )}
+  
+                  Add member
+                </button>
+  
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     );
   }
@@ -866,6 +1174,43 @@ import {
   
         </div>
   
+      </div>
+    );
+  }
+  
+  
+  function FormField({
+    label,
+    value,
+    placeholder,
+    type = "text",
+    onChange,
+  }: {
+    label: string;
+    value: string;
+    placeholder: string;
+    type?: string;
+    onChange: (
+      value: string
+    ) => void;
+  }) {
+    return (
+      <div>
+        <label className="text-sm font-bold text-slate-700">
+          {label}
+        </label>
+  
+        <input
+          type={type}
+          value={value}
+          placeholder={placeholder}
+          onChange={(event) =>
+            onChange(
+              event.target.value
+            )
+          }
+          className="mt-2 h-11 w-full rounded-lg border border-slate-300 px-3 text-sm outline-none focus:border-blue-600 focus:ring-2 focus:ring-blue-100"
+        />
       </div>
     );
   }
