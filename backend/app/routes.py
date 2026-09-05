@@ -21,6 +21,7 @@ from app.models import (
     GeofenceEvent,
     Notification,
     Project,
+    TrackerDevice,
 )
 from app.schemas import (
     AssetCreate,
@@ -947,6 +948,19 @@ def update_gps_with_tracker_key(
         gps_status=gps_status,
         recorded_at=recorded_at,
     )
+
+    tracker_device = (
+        database.query(TrackerDevice)
+        .filter(
+            TrackerDevice.asset_id == asset.id
+        )
+        .first()
+    )
+
+    if tracker_device:
+        tracker_device.last_communication_at = (
+            datetime.now(timezone.utc)
+        )
 
     database.commit()
     database.refresh(asset)
