@@ -30,6 +30,7 @@ import type {
   AssetStatus,
 } from "../types/asset";
 
+
 const API_URL = `${import.meta.env.VITE_API_URL}/assets`;
 
 const DEFAULT_MAP_CENTER: [number, number] = [
@@ -37,49 +38,93 @@ const DEFAULT_MAP_CENTER: [number, number] = [
   -81.40757,
 ];
 
+
 type ApiAsset = {
   id: number;
+
   asset_number: string;
   asset_name: string;
   category: string;
   project: string;
+  project_id: number | null;
+
   status: AssetStatus;
   gps_status: Asset["gpsStatus"];
+
   assigned_to: string;
   last_seen: string;
+
   latitude: number | null;
   longitude: number | null;
   gps_updated_at: string | null;
+
+  has_tracker_key: boolean;
+  tracker_key_created_at: string | null;
+
+  geofence_enabled: boolean;
+  geofence_latitude: number | null;
+  geofence_longitude: number | null;
+  geofence_radius_meters: number | null;
+
   notes: string;
   created_at: string;
 };
 
-function mapApiAsset(asset: ApiAsset): Asset {
+
+function mapApiAsset(
+  asset: ApiAsset
+): Asset {
   return {
     id: asset.id,
+
     assetNumber: asset.asset_number,
     assetName: asset.asset_name,
     category: asset.category,
     project: asset.project,
+    projectId: asset.project_id,
+
     status: asset.status,
     gpsStatus: asset.gps_status,
+
     assignedTo: asset.assigned_to,
     lastSeen: asset.last_seen,
+
     latitude: asset.latitude,
     longitude: asset.longitude,
     gpsUpdatedAt: asset.gps_updated_at,
+
+    hasTrackerKey: asset.has_tracker_key,
+    trackerKeyCreatedAt:
+      asset.tracker_key_created_at,
+
+    geofenceEnabled:
+      asset.geofence_enabled,
+
+    geofenceLatitude:
+      asset.geofence_latitude,
+
+    geofenceLongitude:
+      asset.geofence_longitude,
+
+    geofenceRadiusMeters:
+      asset.geofence_radius_meters,
+
     notes: asset.notes,
     createdAt: asset.created_at,
   };
 }
 
-function getFirstName(fullName?: string) {
+
+function getFirstName(
+  fullName?: string
+) {
   if (!fullName) {
     return "there";
   }
 
   return fullName.trim().split(/\s+/)[0];
 }
+
 
 function getGreeting() {
   const hour = new Date().getHours();
@@ -95,7 +140,10 @@ function getGreeting() {
   return "Good evening";
 }
 
-function getMarkerColor(asset: Asset) {
+
+function getMarkerColor(
+  asset: Asset
+) {
   if (asset.status === "Maintenance") {
     return "#d97706";
   }
@@ -114,7 +162,10 @@ function getMarkerColor(asset: Asset) {
   return "#1d4ed8";
 }
 
-function createAssetMarker(asset: Asset) {
+
+function createAssetMarker(
+  asset: Asset
+) {
   const color = getMarkerColor(asset);
 
   return L.divIcon({
@@ -146,9 +197,11 @@ function createAssetMarker(asset: Asset) {
   });
 }
 
+
 type FitMapToAssetsProps = {
   assets: Asset[];
 };
+
 
 function FitMapToAssets({
   assets,
@@ -157,7 +210,11 @@ function FitMapToAssets({
 
   useEffect(() => {
     if (assets.length === 0) {
-      map.setView(DEFAULT_MAP_CENTER, 11);
+      map.setView(
+        DEFAULT_MAP_CENTER,
+        11
+      );
+
       return;
     }
 
@@ -169,8 +226,11 @@ function FitMapToAssets({
         asset.longitude !== null
       ) {
         map.setView(
-          [asset.latitude, asset.longitude],
-          15,
+          [
+            asset.latitude,
+            asset.longitude,
+          ],
+          15
         );
       }
 
@@ -182,12 +242,12 @@ function FitMapToAssets({
         .filter(
           (asset) =>
             asset.latitude !== null &&
-            asset.longitude !== null,
+            asset.longitude !== null
         )
         .map((asset) => [
           asset.latitude as number,
           asset.longitude as number,
-        ]),
+        ])
     );
 
     if (bounds.isValid()) {
@@ -201,16 +261,25 @@ function FitMapToAssets({
   return null;
 }
 
+
 function Dashboard() {
   const navigate = useNavigate();
   const user = getAuthenticatedUser();
 
-  const [assets, setAssets] = useState<Asset[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [pageError, setPageError] = useState("");
+  const [assets, setAssets] =
+    useState<Asset[]>([]);
 
-  const firstName = getFirstName(user?.full_name);
+  const [loading, setLoading] =
+    useState(true);
+
+  const [pageError, setPageError] =
+    useState("");
+
+  const firstName =
+    getFirstName(user?.full_name);
+
   const greeting = getGreeting();
+
 
   useEffect(() => {
     const loadAssets = async () => {
@@ -218,31 +287,43 @@ function Dashboard() {
         setLoading(true);
         setPageError("");
 
-        const response = await fetch(`${API_URL}/`, {
-          headers: {
-            ...getAuthorizationHeaders(),
-          },
-        });
+        const response = await fetch(
+          `${API_URL}/`,
+          {
+            headers: {
+              ...getAuthorizationHeaders(),
+            },
+          }
+        );
 
         if (response.status === 401) {
           clearAuthentication();
-          navigate("/login", { replace: true });
+
+          navigate(
+            "/login",
+            {
+              replace: true,
+            }
+          );
+
           return;
         }
 
         if (!response.ok) {
           throw new Error(
-            "Unable to load dashboard data.",
+            "Unable to load dashboard data."
           );
         }
 
         const data =
           (await response.json()) as ApiAsset[];
 
-        setAssets(data.map(mapApiAsset));
+        setAssets(
+          data.map(mapApiAsset)
+        );
       } catch {
         setPageError(
-          "Could not load dashboard data. Make sure the IronTrace API is running.",
+          "Could not load dashboard data. Make sure the IronTrace API is running."
         );
       } finally {
         setLoading(false);
@@ -252,45 +333,60 @@ function Dashboard() {
     void loadAssets();
   }, [navigate]);
 
+
   const mappedAssets = useMemo(
     () =>
       assets.filter(
         (asset) =>
           asset.latitude !== null &&
-          asset.longitude !== null,
+          asset.longitude !== null
       ),
-    [assets],
+    [assets]
   );
+
 
   const dashboardStats = useMemo(() => {
     const totalAssets = assets.length;
 
-    const onlineAssets = assets.filter(
-      (asset) => asset.status === "Online",
-    ).length;
+    const onlineAssets =
+      assets.filter(
+        (asset) =>
+          asset.status === "Online"
+      ).length;
 
-    const offlineAssets = assets.filter(
-      (asset) => asset.status === "Offline",
-    ).length;
+    const offlineAssets =
+      assets.filter(
+        (asset) =>
+          asset.status === "Offline"
+      ).length;
 
-    const maintenanceAssets = assets.filter(
-      (asset) => asset.status === "Maintenance",
-    ).length;
+    const maintenanceAssets =
+      assets.filter(
+        (asset) =>
+          asset.status === "Maintenance"
+      ).length;
 
     const activeProjects = new Set(
       assets
-        .map((asset) => asset.project.trim())
+        .map(
+          (asset) =>
+            asset.project.trim()
+        )
         .filter(
           (project) =>
             project &&
-            project.toLowerCase() !== "unassigned",
-        ),
+            project.toLowerCase() !==
+              "unassigned"
+        )
     ).size;
 
     const reportingPercentage =
       totalAssets > 0
         ? Math.round(
-            (onlineAssets / totalAssets) * 100,
+            (
+              onlineAssets /
+              totalAssets
+            ) * 100
           )
         : 0;
 
@@ -303,6 +399,7 @@ function Dashboard() {
       reportingPercentage,
     };
   }, [assets]);
+
 
   return (
     <div className="flex min-h-screen bg-slate-100">
@@ -341,7 +438,7 @@ function Dashboard() {
                   loading
                     ? "—"
                     : String(
-                        dashboardStats.totalAssets,
+                        dashboardStats.totalAssets
                       )
                 }
                 description={
@@ -365,7 +462,7 @@ function Dashboard() {
                   loading
                     ? "—"
                     : String(
-                        dashboardStats.onlineAssets,
+                        dashboardStats.onlineAssets
                       )
                 }
                 description={
@@ -382,7 +479,7 @@ function Dashboard() {
                   loading
                     ? "—"
                     : String(
-                        dashboardStats.offlineAssets,
+                        dashboardStats.offlineAssets
                       )
                 }
                 description={
@@ -406,14 +503,16 @@ function Dashboard() {
                   loading
                     ? "—"
                     : String(
-                        dashboardStats.maintenanceAssets,
+                        dashboardStats
+                          .maintenanceAssets
                       )
                 }
                 description={
                   loading
                     ? "Loading maintenance status"
                     : `${
-                        dashboardStats.maintenanceAssets
+                        dashboardStats
+                          .maintenanceAssets
                       } ${
                         dashboardStats
                           .maintenanceAssets === 1
@@ -478,7 +577,7 @@ function Dashboard() {
                     className="h-[470px] w-full"
                   >
                     <TileLayer
-                      attribution='&copy; OpenStreetMap contributors'
+                      attribution="&copy; OpenStreetMap contributors"
                       url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
                     />
 
@@ -486,63 +585,94 @@ function Dashboard() {
                       assets={mappedAssets}
                     />
 
-                    {mappedAssets.map((asset) => (
-                      <Marker
-                        key={asset.id}
-                        position={[
-                          asset.latitude as number,
-                          asset.longitude as number,
-                        ]}
-                        icon={createAssetMarker(asset)}
-                      >
-                        <Popup>
-                          <div className="min-w-[210px]">
-                            <p className="text-xs font-bold uppercase tracking-wide text-blue-700">
-                              Asset #
-                              {asset.assetNumber}
-                            </p>
-
-                            <p className="mt-1 text-base font-bold text-slate-950">
-                              {asset.assetName}
-                            </p>
-
-                            <p className="mt-1 text-sm text-slate-600">
-                              {asset.project}
-                            </p>
-
-                            <div className="mt-3 space-y-1 text-sm text-slate-700">
-                              <p>
-                                <strong>Status:</strong>{" "}
-                                {asset.status}
+                    {mappedAssets.map(
+                      (asset) => (
+                        <Marker
+                          key={asset.id}
+                          position={[
+                            asset.latitude as number,
+                            asset.longitude as number,
+                          ]}
+                          icon={createAssetMarker(
+                            asset
+                          )}
+                        >
+                          <Popup>
+                            <div className="min-w-[210px]">
+                              <p className="text-xs font-bold uppercase tracking-wide text-blue-700">
+                                Asset #
+                                {asset.assetNumber}
                               </p>
 
-                              <p>
-                                <strong>GPS:</strong>{" "}
-                                {asset.gpsStatus}
+                              <p className="mt-1 text-base font-bold text-slate-950">
+                                {asset.assetName}
                               </p>
 
-                              <p>
-                                <strong>
-                                  Assigned:
-                                </strong>{" "}
-                                {asset.assignedTo}
+                              <p className="mt-1 text-sm text-slate-600">
+                                {asset.project}
                               </p>
+
+                              <div className="mt-3 space-y-1 text-sm text-slate-700">
+                                <p>
+                                  <strong>
+                                    Status:
+                                  </strong>{" "}
+                                  {asset.status}
+                                </p>
+
+                                <p>
+                                  <strong>
+                                    GPS:
+                                  </strong>{" "}
+                                  {asset.gpsStatus}
+                                </p>
+
+                                <p>
+                                  <strong>
+                                    Tracker:
+                                  </strong>{" "}
+                                  {asset.hasTrackerKey
+                                    ? "Connected"
+                                    : "Not connected"}
+                                </p>
+
+                                <p>
+                                  <strong>
+                                    Assigned:
+                                  </strong>{" "}
+                                  {asset.assignedTo}
+                                </p>
+
+                                <p>
+                                  <strong>
+                                    Geofence:
+                                  </strong>{" "}
+                                  {asset.geofenceEnabled
+                                    ? "Enabled"
+                                    : "Disabled"}
+                                </p>
+                              </div>
+
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  navigate(
+                                    "/assets"
+                                  )
+                                }
+                                className="mt-4 inline-flex items-center gap-1 font-bold text-blue-700 hover:underline"
+                              >
+                                View asset
+
+                                <ArrowRight
+                                  size={14}
+                                />
+                              </button>
                             </div>
-
-                            <button
-                              type="button"
-                              onClick={() =>
-                                navigate("/assets")
-                              }
-                              className="mt-4 inline-flex items-center gap-1 font-bold text-blue-700 hover:underline"
-                            >
-                              View asset
-                              <ArrowRight size={14} />
-                            </button>
-                          </div>
-                        </Popup>
-                      </Marker>
-                    ))}
+                          </Popup>
+                        </Marker>
+                      )
+                    )}
                   </MapContainer>
                 </div>
               </div>
@@ -561,13 +691,16 @@ function Dashboard() {
                     className="inline-flex items-center gap-1 text-xs font-bold text-blue-700 hover:underline"
                   >
                     View assets
+
                     <ArrowRight size={14} />
                   </button>
                 </div>
 
                 <div className="divide-y divide-slate-100">
                   <Activity
-                    icon={<Radio size={18} />}
+                    icon={
+                      <Radio size={18} />
+                    }
                     tone="success"
                     title={`${dashboardStats.onlineAssets} online`}
                     detail="Assets currently reporting normally"
@@ -575,7 +708,9 @@ function Dashboard() {
 
                   <Activity
                     icon={
-                      <TriangleAlert size={18} />
+                      <TriangleAlert
+                        size={18}
+                      />
                     }
                     tone="danger"
                     title={`${dashboardStats.offlineAssets} offline`}
@@ -583,14 +718,18 @@ function Dashboard() {
                   />
 
                   <Activity
-                    icon={<Wrench size={18} />}
+                    icon={
+                      <Wrench size={18} />
+                    }
                     tone="warning"
                     title={`${dashboardStats.maintenanceAssets} in maintenance`}
                     detail="Equipment currently unavailable for service"
                   />
 
                   <Activity
-                    icon={<MapPin size={18} />}
+                    icon={
+                      <MapPin size={18} />
+                    }
                     tone="blue"
                     title={`${mappedAssets.length} mapped assets`}
                     detail="Assets with available GPS coordinates"
@@ -605,24 +744,35 @@ function Dashboard() {
   );
 }
 
+
 type ActivityProps = {
   icon: React.ReactNode;
+
   tone:
     | "blue"
     | "success"
     | "danger"
     | "warning";
+
   title: string;
   detail: string;
 };
 
+
 const activityTones = {
-  blue: "bg-blue-50 text-blue-700",
+  blue:
+    "bg-blue-50 text-blue-700",
+
   success:
     "bg-emerald-50 text-emerald-700",
-  danger: "bg-red-50 text-red-700",
-  warning: "bg-amber-50 text-amber-800",
+
+  danger:
+    "bg-red-50 text-red-700",
+
+  warning:
+    "bg-amber-50 text-amber-800",
 };
+
 
 function Activity({
   icon,
@@ -650,5 +800,6 @@ function Activity({
     </div>
   );
 }
+
 
 export default Dashboard;
