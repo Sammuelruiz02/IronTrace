@@ -60,6 +60,7 @@ import {
   
     category: string;
     project: string;
+    project_id: number | null;
   
     status: AssetStatus;
     gps_status: Asset["gpsStatus"];
@@ -101,6 +102,9 @@ import {
   
       project:
         asset.project,
+      
+      projectId:
+        asset.project_id,
   
       status:
         asset.status,

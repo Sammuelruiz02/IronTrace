@@ -1,5 +1,11 @@
 import { useState } from "react";
-import { Save, X } from "lucide-react";
+import {
+  MapPin,
+  Radar,
+  Save,
+  X,
+} from "lucide-react";
+
 import type {
   Asset,
   AssetFormValues,
@@ -7,7 +13,13 @@ import type {
   GpsStatus,
 } from "../../types/asset";
 
+type ProjectOption = {
+  id: number;
+  name: string;
+};
+
 type AssetFormProps = {
+  projects?: ProjectOption[];
   mode: "create" | "edit";
   asset?: Asset | null;
   errorMessage?: string;
@@ -20,22 +32,50 @@ const blankForm: AssetFormValues = {
   assetName: "",
   category: "",
   project: "",
+  projectId: null,
   status: "Online",
   gpsStatus: "Unassigned",
   assignedTo: "Unassigned",
+  latitude: null,
+  longitude: null,
+  geofenceEnabled: false,
+  geofenceLatitude: null,
+  geofenceLongitude: null,
+  geofenceRadiusMeters: null,
   notes: "",
 };
 
 function AssetForm({
+  projects = [],
   mode,
   asset,
   errorMessage,
   onClose,
   onSubmit,
 }: AssetFormProps) {
-  const [form, setForm] = useState<AssetFormValues>(() =>
-    mode === "edit" && asset ? { ...asset } : blankForm,
-  );
+  const [form, setForm] = useState<AssetFormValues>(() => {
+    if (mode === "edit" && asset) {
+      return {
+        assetNumber: asset.assetNumber,
+        assetName: asset.assetName,
+        category: asset.category,
+        project: asset.project,
+        projectId: asset.projectId,
+        status: asset.status,
+        gpsStatus: asset.gpsStatus,
+        assignedTo: asset.assignedTo,
+        latitude: asset.latitude,
+        longitude: asset.longitude,
+        geofenceEnabled: asset.geofenceEnabled,
+        geofenceLatitude: asset.geofenceLatitude,
+        geofenceLongitude: asset.geofenceLongitude,
+        geofenceRadiusMeters: asset.geofenceRadiusMeters,
+        notes: asset.notes,
+      };
+    }
+
+    return blankForm;
+  });
 
   const [localError, setLocalError] = useState("");
 
@@ -49,6 +89,54 @@ function AssetForm({
     }));
   };
 
+  const updateCoordinate = (
+    field:
+      | "latitude"
+      | "longitude"
+      | "geofenceLatitude"
+      | "geofenceLongitude"
+      | "geofenceRadiusMeters",
+    value: string,
+  ) => {
+    if (value.trim() === "") {
+      updateField(field, null);
+      return;
+    }
+
+    const numericValue = Number(value);
+
+    if (!Number.isNaN(numericValue)) {
+      updateField(field, numericValue);
+    }
+  };
+
+  const handleProjectChange = (value: string) => {
+    if (!value) {
+      setForm((current) => ({
+        ...current,
+        projectId: null,
+        project: "",
+      }));
+      return;
+    }
+
+    const projectId = Number(value);
+
+    const selectedProject = projects.find(
+      (project) => project.id === projectId,
+    );
+
+    if (!selectedProject) {
+      return;
+    }
+
+    setForm((current) => ({
+      ...current,
+      projectId: selectedProject.id,
+      project: selectedProject.name,
+    }));
+  };
+
   const handleSubmit = (
     event: React.FormEvent<HTMLFormElement>,
   ) => {
@@ -57,13 +145,87 @@ function AssetForm({
     if (
       !form.assetNumber.trim() ||
       !form.assetName.trim() ||
-      !form.category.trim() ||
-      !form.project.trim()
+      !form.category.trim()
     ) {
       setLocalError(
-        "Asset number, name, category, and project are required.",
+        "Asset number, name, and category are required.",
       );
       return;
+    }
+
+    if (form.projectId === null) {
+      setLocalError("Please select a project.");
+      return;
+    }
+
+    if (
+      form.latitude !== null &&
+      (form.latitude < -90 || form.latitude > 90)
+    ) {
+      setLocalError(
+        "Latitude must be between -90 and 90.",
+      );
+      return;
+    }
+
+    if (
+      form.longitude !== null &&
+      (form.longitude < -180 || form.longitude > 180)
+    ) {
+      setLocalError(
+        "Longitude must be between -180 and 180.",
+      );
+      return;
+    }
+
+    const hasLatitude = form.latitude !== null;
+    const hasLongitude = form.longitude !== null;
+
+    if (hasLatitude !== hasLongitude) {
+      setLocalError(
+        "Enter both latitude and longitude, or leave both blank.",
+      );
+      return;
+    }
+
+    if (form.geofenceEnabled) {
+      if (
+        form.geofenceLatitude === null ||
+        form.geofenceLongitude === null ||
+        form.geofenceRadiusMeters === null
+      ) {
+        setLocalError(
+          "Geofence latitude, longitude, and radius are required when geofencing is enabled.",
+        );
+        return;
+      }
+
+      if (
+        form.geofenceLatitude < -90 ||
+        form.geofenceLatitude > 90
+      ) {
+        setLocalError(
+          "Geofence latitude must be between -90 and 90.",
+        );
+        return;
+      }
+
+      if (
+        form.geofenceLongitude < -180 ||
+        form.geofenceLongitude > 180
+      ) {
+        setLocalError(
+          "Geofence longitude must be between -180 and 180.",
+        );
+        return;
+      }
+
+      if (form.geofenceRadiusMeters <= 0) {
+        setLocalError(
+          "Geofence radius must be greater than 0 meters.",
+        );
+        return;
+      }
     }
 
     setLocalError("");
@@ -74,8 +236,8 @@ function AssetForm({
       assetName: form.assetName.trim(),
       category: form.category.trim(),
       project: form.project.trim(),
-      assignedTo:
-        form.assignedTo.trim() || "Unassigned",
+      projectId: form.projectId,
+      assignedTo: form.assignedTo.trim() || "Unassigned",
       notes: form.notes.trim(),
     });
   };
@@ -109,8 +271,7 @@ function AssetForm({
             </h2>
 
             <p className="mt-1 text-sm text-slate-500">
-              Enter the equipment and tracking
-              information below.
+              Enter equipment, project, GPS, and geofence information.
             </p>
           </div>
 
@@ -124,10 +285,7 @@ function AssetForm({
           </button>
         </div>
 
-        <form
-          onSubmit={handleSubmit}
-          className="p-6"
-        >
+        <form onSubmit={handleSubmit} className="p-6">
           {(localError || errorMessage) && (
             <div className="mb-5 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-700">
               {localError || errorMessage}
@@ -178,17 +336,34 @@ function AssetForm({
             </Field>
 
             <Field label="Project" required>
-              <input
-                value={form.project}
+              <select
+                value={form.projectId ?? ""}
                 onChange={(event) =>
-                  updateField(
-                    "project",
+                  handleProjectChange(
                     event.target.value,
                   )
                 }
-                placeholder="Disney Project"
                 className="field-input"
-              />
+              >
+                <option value="">
+                  Select a project
+                </option>
+
+                {projects.map((project) => (
+                  <option
+                    key={project.id}
+                    value={project.id}
+                  >
+                    {project.name}
+                  </option>
+                ))}
+              </select>
+
+              {projects.length === 0 && (
+                <p className="mt-2 text-xs font-medium text-amber-700">
+                  No projects are available. Create a project first.
+                </p>
+              )}
             </Field>
 
             <Field label="Operational status">
@@ -228,6 +403,9 @@ function AssetForm({
                 <option value="Live">
                   Live
                 </option>
+                <option value="Stale">
+                  Stale
+                </option>
                 <option value="Offline">
                   Offline
                 </option>
@@ -253,6 +431,155 @@ function AssetForm({
                 className="field-input"
               />
             </Field>
+
+            <div className="md:col-span-2 rounded-xl border border-blue-100 bg-blue-50/70 p-4">
+              <div className="mb-4 flex items-start gap-3">
+                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-blue-700 text-white">
+                  <MapPin size={19} />
+                </div>
+
+                <div>
+                  <h3 className="font-bold text-slate-900">
+                    GPS location
+                  </h3>
+
+                  <p className="mt-1 text-sm text-slate-600">
+                    Enter both coordinates to place this asset on the map.
+                    Leave both blank if no location is available.
+                  </p>
+                </div>
+              </div>
+
+              <div className="grid gap-5 md:grid-cols-2">
+                <Field label="Latitude">
+                  <input
+                    type="number"
+                    step="any"
+                    min="-90"
+                    max="90"
+                    value={form.latitude ?? ""}
+                    onChange={(event) =>
+                      updateCoordinate(
+                        "latitude",
+                        event.target.value,
+                      )
+                    }
+                    placeholder="28.291956"
+                    className="field-input bg-white"
+                  />
+                </Field>
+
+                <Field label="Longitude">
+                  <input
+                    type="number"
+                    step="any"
+                    min="-180"
+                    max="180"
+                    value={form.longitude ?? ""}
+                    onChange={(event) =>
+                      updateCoordinate(
+                        "longitude",
+                        event.target.value,
+                      )
+                    }
+                    placeholder="-81.407570"
+                    className="field-input bg-white"
+                  />
+                </Field>
+              </div>
+            </div>
+
+            <div className="md:col-span-2 rounded-xl border border-orange-100 bg-orange-50/70 p-4">
+              <div className="flex items-start justify-between gap-4">
+                <div className="flex items-start gap-3">
+                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-orange-600 text-white">
+                    <Radar size={19} />
+                  </div>
+
+                  <div>
+                    <h3 className="font-bold text-slate-900">
+                      Geofence
+                    </h3>
+
+                    <p className="mt-1 text-sm text-slate-600">
+                      Create an authorized radius around the jobsite for this asset.
+                    </p>
+                  </div>
+                </div>
+
+                <label className="flex shrink-0 items-center gap-2 text-sm font-bold text-slate-700">
+                  <input
+                    type="checkbox"
+                    checked={form.geofenceEnabled}
+                    onChange={(event) =>
+                      updateField(
+                        "geofenceEnabled",
+                        event.target.checked,
+                      )
+                    }
+                    className="h-4 w-4 rounded border-slate-300"
+                  />
+                  Enabled
+                </label>
+              </div>
+
+              {form.geofenceEnabled && (
+                <div className="mt-5 grid gap-5 md:grid-cols-3">
+                  <Field label="Center latitude">
+                    <input
+                      type="number"
+                      step="any"
+                      min="-90"
+                      max="90"
+                      value={form.geofenceLatitude ?? ""}
+                      onChange={(event) =>
+                        updateCoordinate(
+                          "geofenceLatitude",
+                          event.target.value,
+                        )
+                      }
+                      placeholder="28.291956"
+                      className="field-input bg-white"
+                    />
+                  </Field>
+
+                  <Field label="Center longitude">
+                    <input
+                      type="number"
+                      step="any"
+                      min="-180"
+                      max="180"
+                      value={form.geofenceLongitude ?? ""}
+                      onChange={(event) =>
+                        updateCoordinate(
+                          "geofenceLongitude",
+                          event.target.value,
+                        )
+                      }
+                      placeholder="-81.407570"
+                      className="field-input bg-white"
+                    />
+                  </Field>
+
+                  <Field label="Radius (meters)">
+                    <input
+                      type="number"
+                      step="any"
+                      min="1"
+                      value={form.geofenceRadiusMeters ?? ""}
+                      onChange={(event) =>
+                        updateCoordinate(
+                          "geofenceRadiusMeters",
+                          event.target.value,
+                        )
+                      }
+                      placeholder="150"
+                      className="field-input bg-white"
+                    />
+                  </Field>
+                </div>
+              )}
+            </div>
 
             <Field
               label="Notes"

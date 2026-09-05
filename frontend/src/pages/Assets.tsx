@@ -41,6 +41,9 @@ import type {
 const API_URL =
   `${import.meta.env.VITE_API_URL}/assets`;
 
+const PROJECTS_API_URL =
+  `${import.meta.env.VITE_API_URL}/projects`;
+
 const BREACH_REFRESH_INTERVAL =
   10000;
 
@@ -58,6 +61,7 @@ type ApiAsset = {
 
   category: string;
   project: string;
+  project_id: number | null;
 
   status: AssetStatus;
   gps_status: Asset["gpsStatus"];
@@ -115,6 +119,11 @@ type ApiError = {
   detail?: string;
 };
 
+type ApiProject = {
+  id: number;
+  name: string;
+};
+
 
 function mapApiAsset(
   asset: ApiAsset,
@@ -133,6 +142,9 @@ function mapApiAsset(
 
     project:
       asset.project,
+    
+      projectId:
+      asset.project_id,
 
     status:
       asset.status,
@@ -201,6 +213,9 @@ function mapFormValues(
 
     project:
       values.project,
+
+    project_id:
+      values.projectId,
 
     status:
       values.status,
@@ -278,12 +293,17 @@ function Assets() {
     useNavigate();
 
 
-  const [
-    assets,
-    setAssets,
-  ] =
-    useState<Asset[]>([]);
-
+    const [
+      assets,
+      setAssets,
+    ] =
+      useState<Asset[]>([]);
+  
+    const [
+      projects,
+      setProjects,
+    ] =
+      useState<ApiProject[]>([]);
 
   const [
     activeBreaches,
@@ -461,6 +481,54 @@ function Assets() {
       };
 
     void loadAssets();
+  }, []);
+
+
+  // -------------------------------------------------------
+  // LOAD PROJECTS
+  // -------------------------------------------------------
+
+
+  useEffect(() => {
+    const loadProjects =
+      async () => {
+        try {
+          const response =
+            await fetch(
+              `${PROJECTS_API_URL}/`,
+              {
+                headers: {
+                  ...getAuthorizationHeaders(),
+                },
+              },
+            );
+
+          if (
+            response.status ===
+            401
+          ) {
+            handleUnauthorized();
+
+            return;
+          }
+
+          if (!response.ok) {
+            return;
+          }
+
+          const data =
+            (await response.json()) as ApiProject[];
+
+          setProjects(
+            data,
+          );
+        } catch {
+          // Keep the Assets page usable
+          // if projects fail to load.
+        }
+      };
+
+    void loadProjects();
   }, []);
 
 
@@ -1531,6 +1599,7 @@ function Assets() {
 
         <AssetForm
           key={`${formMode}-${editingAsset?.id ?? "new"}`}
+          projects={projects}
 
           mode={
             formMode
