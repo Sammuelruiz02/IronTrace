@@ -20,6 +20,7 @@ from app.models import (
     AssetLocation,
     GeofenceEvent,
     Notification,
+    Project,
 )
 from app.schemas import (
     AssetCreate,
@@ -772,6 +773,50 @@ def create_asset(
         asset_data.model_dump()
     )
 
+    # -----------------------------------------------------
+    # PROJECT VALIDATION / SYNCHRONIZATION
+    # -----------------------------------------------------
+
+    if asset_data.project_id is not None:
+        project = (
+            database.query(Project)
+            .filter(
+                Project.id
+                == asset_data.project_id,
+                Project.organization_id
+                == organization_id,
+            )
+            .first()
+        )
+
+        if not project:
+            raise HTTPException(
+                status_code=(
+                    status.HTTP_404_NOT_FOUND
+                ),
+                detail=(
+                    "Project not found in "
+                    "your organization."
+                ),
+            )
+
+        asset_values[
+            "project_id"
+        ] = project.id
+
+        asset_values[
+            "project"
+        ] = project.name
+
+    else:
+        asset_values[
+            "project_id"
+        ] = None
+
+        asset_values[
+            "project"
+        ] = "Unassigned"
+
     # Keep the creator for audit/history purposes.
     asset_values[
         "owner_id"
@@ -1162,6 +1207,77 @@ def update_asset(
             exclude_unset=True
         )
     )
+
+    # -----------------------------------------------------
+    # PROJECT VALIDATION / SYNCHRONIZATION
+    # -----------------------------------------------------
+
+    if "project_id" in updates:
+        new_project_id = (
+            updates[
+                "project_id"
+            ]
+        )
+
+        if new_project_id is None:
+            updates[
+                "project_id"
+            ] = None
+
+            updates[
+                "project"
+            ] = "Unassigned"
+
+        else:
+            project = (
+                database.query(Project)
+                .filter(
+                    Project.id
+                    == new_project_id,
+                    Project.organization_id
+                    == asset.organization_id,
+                )
+                .first()
+            )
+
+            if not project:
+                raise HTTPException(
+                    status_code=(
+                        status.HTTP_404_NOT_FOUND
+                    ),
+                    detail=(
+                        "Project not found in "
+                        "your organization."
+                    ),
+                )
+
+            updates[
+                "project_id"
+            ] = project.id
+
+            updates[
+                "project"
+            ] = project.name
+
+    elif (
+        asset.project_id is not None
+        and "project" in updates
+    ):
+        linked_project = (
+            database.query(Project)
+            .filter(
+                Project.id
+                == asset.project_id,
+                Project.organization_id
+                == asset.organization_id,
+            )
+            .first()
+        )
+
+        if linked_project:
+            updates[
+                "project"
+            ] = linked_project.name
 
     if (
         "asset_number" in updates
