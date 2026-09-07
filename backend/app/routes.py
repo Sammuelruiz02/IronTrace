@@ -1,4 +1,4 @@
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 import hashlib
 import hmac
 import math
@@ -311,6 +311,50 @@ def normalize_recorded_at(
 
 
 # ---------------------------------------------------------
+# OFFLINE TRACKER CHECK
+# ---------------------------------------------------------
+
+
+@router.post(
+    "/trackers/check-offline",
+)
+def check_offline_trackers(
+    current_user: User = Depends(
+        get_current_user
+    ),
+    database: Session = Depends(
+        get_database
+    ),
+):
+    require_manager_or_admin(
+        current_user
+    )
+
+    organization_id = (
+        require_organization(
+            current_user
+        )
+    )
+
+    created_count = (
+        check_for_offline_tracker_devices(
+            database=database,
+            organization_id=organization_id,
+            offline_after_minutes=15,
+        )
+    )
+
+    database.commit()
+
+    return {
+        "created_notifications":
+            created_count,
+        "offline_after_minutes":
+            15,
+    }
+
+
+# ---------------------------------------------------------
 # LOCATION HISTORY
 # ---------------------------------------------------------
 
@@ -505,6 +549,106 @@ def save_geofence_event(
         )
 
         database.add(notification)
+
+
+def create_tracker_offline_notification(
+    database: Session,
+    device: TrackerDevice,
+) -> None:
+    existing_notification = (
+        database.query(Notification)
+        .filter(
+            Notification.device_id == device.id,
+            Notification.notification_type == "TrackerOffline",
+            Notification.is_resolved.is_(False),
+        )
+        .first()
+    )
+
+    if existing_notification:
+        return
+
+    notification = Notification(
+        organization_id=device.organization_id,
+        asset_id=device.asset_id,
+        device_id=device.id,
+        geofence_event_id=None,
+        notification_type="TrackerOffline",
+        severity="High",
+        title=f"Tracker offline: {device.device_name}",
+        message=(
+            f"Tracker {device.device_name} "
+            f"({device.serial_number}) has stopped communicating."
+        ),
+        is_read=False,
+        read_at=None,
+        read_by_user_id=None,
+        is_resolved=False,
+        resolved_at=None,
+        resolved_by_user_id=None,
+        created_at=datetime.now(timezone.utc),
+    )
+
+    database.add(notification)
+
+
+def check_for_offline_tracker_devices(
+    database: Session,
+    organization_id: int,
+    offline_after_minutes: int = 15,
+) -> int:
+    cutoff = (
+        datetime.now(timezone.utc)
+        - timedelta(
+            minutes=offline_after_minutes
+        )
+    )
+
+    devices = (
+        database.query(TrackerDevice)
+        .filter(
+            TrackerDevice.organization_id
+            == organization_id,
+            TrackerDevice.status
+            == "Active",
+            TrackerDevice.asset_id.is_not(
+                None
+            ),
+            TrackerDevice.last_communication_at.is_not(
+                None
+            ),
+            TrackerDevice.last_communication_at
+            < cutoff,
+        )
+        .all()
+    )
+
+    created_count = 0
+
+    for device in devices:
+        before_count = (
+            database.query(Notification)
+            .filter(
+                Notification.device_id
+                == device.id,
+                Notification.notification_type
+                == "TrackerOffline",
+                Notification.is_resolved.is_(
+                    False
+                ),
+            )
+            .count()
+        )
+
+        create_tracker_offline_notification(
+            database=database,
+            device=device,
+        )
+
+        if before_count == 0:
+            created_count += 1
+
+    return created_count
 
 
 def process_geofence_transition(
