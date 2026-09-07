@@ -592,6 +592,33 @@ def create_tracker_offline_notification(
     database.add(notification)
 
 
+def resolve_tracker_offline_notification(
+    database: Session,
+    device: TrackerDevice,
+) -> None:
+    notifications = (
+        database.query(Notification)
+        .filter(
+            Notification.device_id == device.id,
+            Notification.notification_type == "TrackerOffline",
+            Notification.is_resolved.is_(False),
+        )
+        .all()
+    )
+
+    if not notifications:
+        return
+
+    resolved_at = datetime.now(
+        timezone.utc
+    )
+
+    for notification in notifications:
+        notification.is_resolved = True
+        notification.resolved_at = resolved_at
+        notification.resolved_by_user_id = None
+
+
 def check_for_offline_tracker_devices(
     database: Session,
     organization_id: int,
@@ -1104,6 +1131,11 @@ def update_gps_with_tracker_key(
     if tracker_device:
         tracker_device.last_communication_at = (
             datetime.now(timezone.utc)
+        )
+
+        resolve_tracker_offline_notification(
+            database=database,
+            device=tracker_device,
         )
 
     database.commit()
