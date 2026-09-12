@@ -59,4 +59,8 @@ scheduler.add_job(
 
 if __name__ == "__main__":
     print("IronTrace scheduler started.")
-    scheduler.start()
+
+    try:
+        scheduler.start()
+    except KeyboardInterrupt:
+        print("IronTrace scheduler stopped.")
