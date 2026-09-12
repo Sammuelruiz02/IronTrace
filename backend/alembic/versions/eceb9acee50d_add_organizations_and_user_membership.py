@@ -34,6 +34,47 @@ depends_on: Union[
 
 def upgrade() -> None:
     # --------------------------------------------------
+    # Create organizations table
+    # --------------------------------------------------
+
+    op.create_table(
+        "organizations",
+        sa.Column(
+            "id",
+            sa.Integer(),
+            nullable=False,
+        ),
+        sa.Column(
+            "name",
+            sa.String(length=150),
+            nullable=False,
+        ),
+        sa.Column(
+            "slug",
+            sa.String(length=150),
+            nullable=False,
+        ),
+        sa.Column(
+            "is_active",
+            sa.Boolean(),
+            nullable=False,
+        ),
+        sa.Column(
+            "created_at",
+            sa.DateTime(timezone=True),
+            nullable=False,
+        ),
+        sa.PrimaryKeyConstraint("id"),
+    )
+
+    op.create_index(
+        "ix_organizations_slug",
+        "organizations",
+        ["slug"],
+        unique=True,
+    )
+
+    # --------------------------------------------------
     # Add organization membership fields to users
     # --------------------------------------------------
 

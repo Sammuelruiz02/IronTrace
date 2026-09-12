@@ -35,6 +35,72 @@ depends_on: Union[
 
 def upgrade() -> None:
     # --------------------------------------------------
+    # CREATE PROJECTS TABLE
+    # --------------------------------------------------
+
+    op.create_table(
+        "projects",
+        sa.Column(
+            "id",
+            sa.Integer(),
+            nullable=False,
+        ),
+        sa.Column(
+            "organization_id",
+            sa.Integer(),
+            nullable=False,
+        ),
+        sa.Column(
+            "name",
+            sa.String(length=150),
+            nullable=False,
+        ),
+        sa.Column(
+            "code",
+            sa.String(length=50),
+            nullable=True,
+        ),
+        sa.Column(
+            "address",
+            sa.String(length=255),
+            nullable=True,
+        ),
+        sa.Column(
+            "status",
+            sa.String(length=50),
+            nullable=False,
+        ),
+        sa.Column(
+            "notes",
+            sa.Text(),
+            nullable=False,
+        ),
+        sa.Column(
+            "created_at",
+            sa.DateTime(timezone=True),
+            nullable=False,
+        ),
+        sa.ForeignKeyConstraint(
+            ["organization_id"],
+            ["organizations.id"],
+            ondelete="CASCADE",
+        ),
+        sa.PrimaryKeyConstraint("id"),
+        sa.UniqueConstraint(
+            "organization_id",
+            "name",
+            name="uq_projects_organization_name",
+        ),
+    )
+
+    op.create_index(
+        "ix_projects_organization_id",
+        "projects",
+        ["organization_id"],
+        unique=False,
+    )
+
+    # --------------------------------------------------
     # ADD STRUCTURED PROJECT REFERENCE TO ASSETS
     # --------------------------------------------------
 
