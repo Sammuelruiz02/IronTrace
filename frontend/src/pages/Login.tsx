@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Navigate, useNavigate } from "react-router-dom";
+import { Link, Navigate, useNavigate } from "react-router-dom";
 import { LockKeyhole, LogIn, RadioTower } from "lucide-react";
 
 import {
@@ -188,6 +188,16 @@ function Login() {
               <LogIn size={18} />
               {isSubmitting ? "Signing in..." : "Sign in"}
             </button>
+
+            <p className="mt-5 text-center text-sm text-slate-600">
+              Don&apos;t have an account?{" "}
+              <Link
+                to="/register"
+                className="font-bold text-blue-700 hover:text-blue-800"
+              >
+                Create account
+              </Link>
+            </p>
           </form>
         </div>
       </section>
