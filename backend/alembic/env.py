@@ -104,7 +104,7 @@ if not database_url:
 
 config.set_main_option(
     "sqlalchemy.url",
-    database_url,
+    database_url.replace("%", "%%"),
 )
 
 
