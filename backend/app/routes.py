@@ -559,7 +559,12 @@ def create_tracker_offline_notification(
         database.query(Notification)
         .filter(
             Notification.device_id == device.id,
-            Notification.notification_type == "TrackerOffline",
+            Notification.notification_type.in_(
+                [
+                    "TrackerOffline",
+                    "TrackerNeverConnected",
+                ]
+            ),
             Notification.is_resolved.is_(False),
         )
         .first()
@@ -617,6 +622,96 @@ def resolve_tracker_offline_notification(
         notification.is_resolved = True
         notification.resolved_at = resolved_at
         notification.resolved_by_user_id = None
+
+
+def create_tracker_never_connected_notification(
+    database: Session,
+    device: TrackerDevice,
+) -> None:
+    existing_notification = (
+        database.query(Notification)
+        .filter(
+            Notification.device_id == device.id,
+            Notification.notification_type == "TrackerNeverConnected",
+            Notification.is_resolved.is_(False),
+        )
+        .first()
+    )
+
+    if existing_notification:
+        return
+
+    notification = Notification(
+        organization_id=device.organization_id,
+        asset_id=device.asset_id,
+        device_id=device.id,
+        geofence_event_id=None,
+        notification_type="TrackerNeverConnected",
+        severity="High",
+        title=f"Tracker never connected: {device.device_name}",
+        message=(
+            f"Tracker {device.device_name} "
+            f"({device.serial_number}) has not communicated "
+            f"since being assigned."
+        ),
+        is_read=False,
+        read_at=None,
+        read_by_user_id=None,
+        is_resolved=False,
+        resolved_at=None,
+        resolved_by_user_id=None,
+        created_at=datetime.now(timezone.utc),
+    )
+
+    database.add(notification)
+
+
+def check_for_never_connected_tracker_devices(
+    database: Session,
+    organization_id: int,
+    grace_period_minutes: int = 30,
+) -> int:
+    cutoff = datetime.now(timezone.utc) - timedelta(
+        minutes=grace_period_minutes
+    )
+
+    devices = (
+        database.query(TrackerDevice)
+        .filter(
+            TrackerDevice.organization_id == organization_id,
+            TrackerDevice.status == "Active",
+            TrackerDevice.asset_id.is_not(None),
+            TrackerDevice.last_communication_at.is_(None),
+            TrackerDevice.assigned_at.is_not(None),
+            TrackerDevice.assigned_at < cutoff,
+        )
+        .all()
+    )
+
+    created_count = 0
+
+    for device in devices:
+        existing_notification = (
+            database.query(Notification)
+            .filter(
+                Notification.device_id == device.id,
+                Notification.notification_type == "TrackerNeverConnected",
+                Notification.is_resolved.is_(False),
+            )
+            .first()
+        )
+
+        if existing_notification:
+            continue
+
+        create_tracker_never_connected_notification(
+            database=database,
+            device=device,
+        )
+
+        created_count += 1
+
+    return created_count
 
 
 def check_for_offline_tracker_devices(
