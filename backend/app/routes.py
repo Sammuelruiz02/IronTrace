@@ -2,6 +2,7 @@ from datetime import datetime, timedelta, timezone
 import hashlib
 import hmac
 import math
+import os
 import secrets
 
 from fastapi import (
@@ -34,7 +35,7 @@ from app.schemas import (
     TrackerGpsUpdate,
     TrackerKeyResponse,
 )
-from app.user_models import User
+from app.user_models import Organization, User
 
 
 router = APIRouter(
@@ -351,6 +352,84 @@ def check_offline_trackers(
             created_count,
         "offline_after_minutes":
             15,
+    }
+
+
+# ---------------------------------------------------------
+# SCHEDULED TRACKER HEALTH CHECK
+# ---------------------------------------------------------
+
+
+@router.post(
+    "/trackers/run-health-check",
+)
+def run_scheduled_tracker_health_check(
+    x_cron_secret: str | None = Header(
+        default=None,
+        alias="X-Cron-Secret",
+    ),
+    database: Session = Depends(
+        get_database
+    ),
+):
+    cron_secret = os.getenv(
+        "CRON_SECRET"
+    )
+
+    if (
+        not cron_secret
+        or not x_cron_secret
+        or not hmac.compare_digest(
+            x_cron_secret,
+            cron_secret,
+        )
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid cron secret.",
+        )
+
+    organization_ids = [
+        row[0]
+        for row in (
+            database.query(
+                Organization.id
+            )
+            .all()
+        )
+    ]
+
+    offline_created = 0
+    never_connected_created = 0
+
+    for organization_id in organization_ids:
+        offline_created += (
+            check_for_offline_tracker_devices(
+                database=database,
+                organization_id=organization_id,
+                offline_after_minutes=15,
+            )
+        )
+
+        never_connected_created += (
+            check_for_never_connected_tracker_devices(
+                database=database,
+                organization_id=organization_id,
+                grace_period_minutes=30,
+            )
+        )
+
+    database.commit()
+
+    return {
+        "status": "completed",
+        "organizations_checked": len(
+            organization_ids
+        ),
+        "offline_notifications_created":
+            offline_created,
+        "never_connected_notifications_created":
+            never_connected_created,
     }
 
 
